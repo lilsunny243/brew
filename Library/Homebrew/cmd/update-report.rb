@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "migrator"
@@ -188,12 +188,46 @@ module Homebrew
       begin
         reporter = Reporter.new(tap)
       rescue Reporter::ReporterRevisionUnsetError => e
-        onoe "#{e.message}\n#{e.backtrace.join "\n"}" if Homebrew::EnvConfig.developer?
+        onoe "#{e.message}\n#{e.backtrace&.join("\n")}" if Homebrew::EnvConfig.developer?
         next
       end
       if reporter.updated?
         updated_taps << tap.name
         hub.add(reporter, auto_update: args.auto_update?)
+      end
+    end
+
+    # If we're installing from the API: we cannot use Git to check for #
+    # differences in packages so instead use {formula,cask}_names.txt to do so.
+    # The first time this runs: we won't yet have a base state
+    # ({formula,cask}_names.before.txt) to compare against so we don't output a
+    # anything and just copy the files for next time.
+    unless Homebrew::EnvConfig.no_install_from_api?
+      api_cache = Homebrew::API::HOMEBREW_CACHE_API
+      core_tap = CoreTap.instance
+      cask_tap = Tap.fetch("homebrew/cask")
+      [
+        [:formula, core_tap, core_tap.formula_dir],
+        [:cask,    cask_tap, cask_tap.cask_dir],
+      ].each do |type, tap, dir|
+        names_txt = api_cache/"#{type}_names.txt"
+        next unless names_txt.exist?
+
+        names_before_txt = api_cache/"#{type}_names.before.txt"
+        if names_before_txt.exist?
+          reporter = Reporter.new(
+            tap,
+            api_names_txt:        names_txt,
+            api_names_before_txt: names_before_txt,
+            api_dir_prefix:       dir,
+          )
+          if reporter.updated?
+            updated_taps << tap.name
+            hub.add(reporter, auto_update: args.auto_update?)
+          end
+        end
+
+        FileUtils.cp names_txt, names_before_txt
       end
     end
 
@@ -278,12 +312,10 @@ module Homebrew
     return if ENV["HOMEBREW_UPDATE_TEST"]
     return unless Homebrew::EnvConfig.no_install_from_api?
     return if Homebrew::EnvConfig.automatically_set_no_install_from_api?
-
-    core_tap = CoreTap.instance
-    return if core_tap.installed?
+    return if CoreTap.instance.installed?
 
     CoreTap.ensure_installed!
-    revision = core_tap.git_head
+    revision = CoreTap.instance.git_head
     ENV["HOMEBREW_UPDATE_BEFORE_HOMEBREW_HOMEBREW_CORE"] = revision
     ENV["HOMEBREW_UPDATE_AFTER_HOMEBREW_HOMEBREW_CORE"] = revision
   end
@@ -314,18 +346,23 @@ class Reporter
     end
   end
 
-  attr_reader :tap, :initial_revision, :current_revision
-
-  def initialize(tap)
+  def initialize(tap, api_names_txt: nil, api_names_before_txt: nil, api_dir_prefix: nil)
     @tap = tap
 
-    initial_revision_var = "HOMEBREW_UPDATE_BEFORE#{tap.repo_var}"
-    @initial_revision = ENV[initial_revision_var].to_s
-    raise ReporterRevisionUnsetError, initial_revision_var if @initial_revision.empty?
+    # This is slightly involved/weird but all the #report logic is shared so it's worth it.
+    if installed_from_api?(api_names_txt, api_names_before_txt, api_dir_prefix)
+      @api_names_txt = api_names_txt
+      @api_names_before_txt = api_names_before_txt
+      @api_dir_prefix = api_dir_prefix
+    else
+      initial_revision_var = "HOMEBREW_UPDATE_BEFORE#{tap.repo_var}"
+      @initial_revision = ENV[initial_revision_var].to_s
+      raise ReporterRevisionUnsetError, initial_revision_var if @initial_revision.empty?
 
-    current_revision_var = "HOMEBREW_UPDATE_AFTER#{tap.repo_var}"
-    @current_revision = ENV[current_revision_var].to_s
-    raise ReporterRevisionUnsetError, current_revision_var if @current_revision.empty?
+      current_revision_var = "HOMEBREW_UPDATE_AFTER#{tap.repo_var}"
+      @current_revision = ENV[current_revision_var].to_s
+      raise ReporterRevisionUnsetError, current_revision_var if @current_revision.empty?
+    end
   end
 
   def report(auto_update: false)
@@ -417,7 +454,11 @@ class Reporter
   end
 
   def updated?
-    initial_revision != current_revision
+    if installed_from_api?
+      diff.present?
+    else
+      initial_revision != current_revision
+    end
   end
 
   def migrate_tap_migration
@@ -455,7 +496,7 @@ class Reporter
             system HOMEBREW_BREW_FILE, "link", new_full_name, "--overwrite"
           end
         rescue Exception => e # rubocop:disable Lint/RescueException
-          onoe "#{e.message}\n#{e.backtrace.join "\n"}" if Homebrew::EnvConfig.developer?
+          onoe "#{e.message}\n#{e.backtrace&.join("\n")}" if Homebrew::EnvConfig.developer?
         end
         next
       end
@@ -519,7 +560,7 @@ class Reporter
       begin
         f = Formulary.factory(new_full_name)
       rescue Exception => e # rubocop:disable Lint/RescueException
-        onoe "#{e.message}\n#{e.backtrace.join "\n"}" if Homebrew::EnvConfig.developer?
+        onoe "#{e.message}\n#{e.backtrace&.join("\n")}" if Homebrew::EnvConfig.developer?
         next
       end
 
@@ -529,11 +570,36 @@ class Reporter
 
   private
 
+  attr_reader :tap, :initial_revision, :current_revision, :api_names_txt, :api_names_before_txt, :api_dir_prefix
+
+  def installed_from_api?(api_names_txt = @api_names_txt, api_names_before_txt = @api_names_before_txt,
+                          api_dir_prefix = @api_dir_prefix)
+    !api_names_txt.nil? && !api_names_before_txt.nil? && !api_dir_prefix.nil?
+  end
+
   def diff
-    Utils.popen_read(
-      "git", "-C", tap.path, "diff-tree", "-r", "--name-status", "--diff-filter=AMDR",
-      "-M85%", initial_revision, current_revision
-    )
+    @diff ||= if installed_from_api?
+      # Hack `git diff` output with regexes to look like `git diff-tree` output.
+      # Yes, I know this is a bit filthy but it saves duplicating the #report logic.
+      diff_output = Utils.popen_read("git", "diff", api_names_txt, api_names_before_txt)
+      header_regex = /^(---|\+\+\+) /.freeze
+      add_delete_characters = ["+", "-"].freeze
+
+      diff_output.lines.map do |line|
+        next if line.match?(header_regex)
+        next unless add_delete_characters.include?(line[0])
+
+        line.sub(/^\+/, "A #{api_dir_prefix.basename}/")
+            .sub(/^-/,  "D #{api_dir_prefix.basename}/")
+            .sub(/$/,   ".rb")
+            .chomp
+      end.compact.join("\n")
+    else
+      Utils.popen_read(
+        "git", "-C", tap.path, "diff-tree", "-r", "--name-status", "--diff-filter=AMDR",
+        "-M85%", initial_revision, current_revision
+      )
+    end
   end
 end
 
@@ -563,7 +629,12 @@ class ReporterHub
   delegate empty?: :@hash
 
   def dump(updated_formula_report: true)
-    report_all = Homebrew::EnvConfig.update_report_all_formulae?
+    report_all = ENV["HOMEBREW_UPDATE_REPORT_ALL_FORMULAE"].present?
+    if report_all && !Homebrew::EnvConfig.no_install_from_api?
+      odeprecated "HOMEBREW_UPDATE_REPORT_ALL_FORMULAE"
+      opoo "This will not report all formulae because Homebrew cannot get this data from the API."
+      report_all = false
+    end
 
     dump_new_formula_report
     dump_new_cask_report
@@ -571,8 +642,8 @@ class ReporterHub
     dump_deleted_formula_report(report_all)
     dump_deleted_cask_report(report_all)
 
-    outdated_formulae = nil
-    outdated_casks = nil
+    outdated_formulae = []
+    outdated_casks = []
 
     if updated_formula_report && report_all
       dump_modified_formula_report

@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 # `brew uses foo bar` returns formulae that use both foo and bar
@@ -15,10 +15,8 @@ module Homebrew
 
   extend DependenciesHelpers
 
-  module_function
-
   sig { returns(CLI::Parser) }
-  def uses_args
+  def self.uses_args
     Homebrew::CLI::Parser.new do
       description <<~EOS
         Show formulae and casks that specify <formula> as a dependency; that is, show dependents
@@ -55,7 +53,7 @@ module Homebrew
     end
   end
 
-  def uses
+  def self.uses
     args = uses_args.parse
 
     Formulary.enable_factory_cache!
@@ -67,7 +65,10 @@ module Homebrew
       opoo e
       used_formulae_missing = true
       # If the formula doesn't exist: fake the needed formula object name.
+      # This is a legacy use of OpenStruct that should be refactored.
+      # rubocop:disable Style/OpenStructUse
       args.named.map { |name| OpenStruct.new name: name, full_name: name }
+      # rubocop:enable Style/OpenStructUse
     end
 
     use_runtime_dependents = args.installed? &&
@@ -85,7 +86,7 @@ module Homebrew
     odie "Missing formulae should not have dependents!" if used_formulae_missing
   end
 
-  def intersection_of_dependents(use_runtime_dependents, used_formulae, args:)
+  def self.intersection_of_dependents(use_runtime_dependents, used_formulae, args:)
     recursive = args.recursive?
     show_formulae_and_casks = !args.formula? && !args.cask?
     includes, ignores = args_includes_ignores(args)
@@ -129,7 +130,7 @@ module Homebrew
     end
   end
 
-  def select_used_dependents(dependents, used_formulae, recursive, includes, ignores)
+  def self.select_used_dependents(dependents, used_formulae, recursive, includes, ignores)
     dependents.select do |d|
       deps = if recursive
         recursive_includes(Dependency, d, includes, ignores)

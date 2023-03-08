@@ -1,18 +1,19 @@
 inherit_from:
   - ../.rubocop.yml
 
+Bundler/GemFilename:
+  Enabled: false
+
 Homebrew/MoveToExtendOS:
   Enabled: true
   Exclude:
     - "{extend,test,requirements}/**/*"
     - "os.rb"
 
-# make rspec formatting more flexible
-Layout/MultilineMethodCallIndentation:
-  Exclude:
-    - "**/*_spec.rb"
-
 Naming/PredicateName:
+  inherit_mode:
+    merge:
+      - AllowedMethods
   AllowedMethods:
     - is_32_bit?
     - is_64_bit?
@@ -52,7 +53,9 @@ Style/Documentation:
     - livecheck/strategy/pypi.rb
     - livecheck/strategy/sourceforge.rb
     - livecheck/strategy/sparkle.rb
+    - livecheck/strategy/xml.rb
     - livecheck/strategy/xorg.rb
+    - livecheck/strategy/yaml.rb
     - os.rb
     - resource.rb
     - utils/inreplace.rb
@@ -60,13 +63,6 @@ Style/Documentation:
     - utils/string_inreplace_extension.rb
     - version.rb
 
-Style/HashAsLastArrayItem:
-  Exclude:
-    - "test/utils/spdx_spec.rb"
-
-Style/BlockDelimiters:
-  BracesRequiredMethods:
-    - "sig"
-
-Bundler/GemFilename:
-  Enabled: false
+Style/DocumentationMethod:
+  Include:
+    - "formula.rb"

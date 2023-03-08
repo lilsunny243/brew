@@ -244,12 +244,24 @@ describe Cask::Installer, :cask do
         expect(Homebrew::API::Cask).to receive(:fetch_source).once.and_return(content)
 
         caffeine = Cask::CaskLoader.load(path)
-        expect(caffeine).to receive(:loaded_from_api).once.and_return(true)
+        expect(caffeine).to receive(:loaded_from_api?).once.and_return(true)
         expect(caffeine).to receive(:caskfile_only?).once.and_return(true)
 
         described_class.new(caffeine).install
         expect(Cask::CaskLoader.load(path)).to be_installed
       end
+    end
+
+    it "zap method reinstall cask" do
+      caffeine = Cask::CaskLoader.load(cask_path("local-caffeine"))
+      described_class.new(caffeine).install
+
+      expect(caffeine).to be_installed
+
+      described_class.new(caffeine).zap
+
+      expect(caffeine).not_to be_installed
+      expect(caffeine.config.appdir.join("Caffeine.app")).not_to be_a_symlink
     end
   end
 
@@ -299,7 +311,7 @@ describe Cask::Installer, :cask do
         expect(Homebrew::API::Cask).to receive(:fetch_source).twice.and_return(content)
 
         caffeine = Cask::CaskLoader.load(path)
-        expect(caffeine).to receive(:loaded_from_api).twice.and_return(true)
+        expect(caffeine).to receive(:loaded_from_api?).twice.and_return(true)
         expect(caffeine).to receive(:caskfile_only?).twice.and_return(true)
         expect(caffeine).to receive(:installed_caskfile).once.and_return(invalid_path)
 

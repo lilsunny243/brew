@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "env_config"
@@ -122,7 +122,9 @@ module Homebrew
         @args = Homebrew::CLI::Args.new
 
         # Filter out Sorbet runtime type checking method calls.
-        cmd_location = caller_locations.select { |location| location.path.exclude?("/gems/sorbet-runtime-") }.second
+        cmd_location = T.must(caller_locations).select do |location|
+          T.must(location.path).exclude?("/gems/sorbet-runtime-")
+        end.second
         @command_name = cmd_location.label.chomp("_args").tr("_", "-")
         @is_dev_cmd = cmd_location.absolute_path.start_with?(Commands::HOMEBREW_DEV_CMD_PATH)
 
@@ -294,7 +296,9 @@ module Homebrew
         [remaining, non_options]
       end
 
-      sig { params(argv: T::Array[String], ignore_invalid_options: T::Boolean).returns(Args) }
+      # @return [Args] The actual return type is `Args`, but since `Args` uses `method_missing` to handle options, the
+      #   `sig` annotates this as returning `T.untyped` to avoid spurious type errors.
+      sig { params(argv: T::Array[String], ignore_invalid_options: T::Boolean).returns(T.untyped) }
       def parse(argv = ARGV.freeze, ignore_invalid_options: false)
         raise "Arguments were already parsed!" if @args_parsed
 
@@ -386,7 +390,7 @@ module Homebrew
 
       sig {
         params(
-          type:   T.any(Symbol, T::Array[String], T::Array[Symbol]),
+          type:   T.any(NilClass, Symbol, T::Array[String], T::Array[Symbol]),
           number: T.nilable(Integer),
           min:    T.nilable(Integer),
           max:    T.nilable(Integer),

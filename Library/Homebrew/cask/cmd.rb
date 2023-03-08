@@ -12,13 +12,10 @@ require "cask/config"
 require "cask/cmd/abstract_command"
 require "cask/cmd/audit"
 require "cask/cmd/fetch"
-require "cask/cmd/info"
 require "cask/cmd/install"
-require "cask/cmd/list"
 require "cask/cmd/reinstall"
 require "cask/cmd/uninstall"
 require "cask/cmd/upgrade"
-require "cask/cmd/zap"
 
 module Cask
   # Implementation of the `brew cask` command-line interface.

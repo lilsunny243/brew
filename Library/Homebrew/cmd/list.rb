@@ -1,10 +1,10 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "metafiles"
 require "formula"
 require "cli/parser"
-require "cask/cmd"
+require "cask/list"
 
 module Homebrew
   extend T::Sig
@@ -164,7 +164,7 @@ module Homebrew
     end
     return if casks.blank?
 
-    Cask::Cmd::List.list_casks(
+    Cask::List.list_casks(
       *casks,
       one:       args.public_send(:"1?"),
       full_name: args.full_name?,

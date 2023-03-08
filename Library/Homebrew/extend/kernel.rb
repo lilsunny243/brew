@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 # Contains shorthand Homebrew utility methods like `ohai`, `opoo`, `odisabled`.
@@ -18,7 +18,7 @@ module Kernel
 
   def ohai_title(title)
     verbose = if respond_to?(:verbose?)
-      verbose?
+      T.unsafe(self).verbose?
     else
       Context.current.verbose?
     end
@@ -34,7 +34,7 @@ module Kernel
 
   def odebug(title, *sput, always_display: false)
     debug = if respond_to?(:debug)
-      debug?
+      T.unsafe(self).debug?
     else
       Context.current.debug?
     end
@@ -47,7 +47,7 @@ module Kernel
 
   def oh1_title(title, truncate: :auto)
     verbose = if respond_to?(:verbose?)
-      verbose?
+      T.unsafe(self).verbose?
     else
       Context.current.verbose?
     end
@@ -192,20 +192,20 @@ module Kernel
     end
   end
 
-  def pretty_duration(s)
-    s = s.to_i
+  def pretty_duration(seconds)
+    seconds = seconds.to_i
     res = +""
 
-    if s > 59
-      m = s / 60
-      s %= 60
-      res = +"#{m} #{"minute".pluralize(m)}"
-      return res.freeze if s.zero?
+    if seconds > 59
+      minutes = seconds / 60
+      seconds %= 60
+      res = +"#{minutes} #{Utils.pluralize("minute", minutes)}"
+      return res.freeze if seconds.zero?
 
       res << " "
     end
 
-    res << "#{s} #{"second".pluralize(s)}"
+    res << "#{seconds} #{Utils.pluralize("second", seconds)}"
     res.freeze
   end
 
@@ -360,14 +360,6 @@ module Kernel
     $stderr = old
   end
 
-  def nostdout(&block)
-    if verbose?
-      yield
-    else
-      redirect_stdout(File::NULL, &block)
-    end
-  end
-
   def redirect_stdout(file)
     out = $stdout.dup
     $stdout.reopen(file)
@@ -436,7 +428,11 @@ module Kernel
   end
 
   def parse_author!(author)
-    /^(?<name>[^<]+?)[ \t]*<(?<email>[^>]+?)>$/ =~ author
+    match_data = /^(?<name>[^<]+?)[ \t]*<(?<email>[^>]+?)>$/.match(author)
+    if match_data
+      name = match_data[:name]
+      email = match_data[:email]
+    end
     raise UsageError, "Unable to parse name and email." if name.blank? && email.blank?
 
     { name: name, email: email }
@@ -475,14 +471,14 @@ module Kernel
   # preserving character encoding validity. The returned string will
   # be not much longer than the specified max_bytes, though the exact
   # shortfall or overrun may vary.
-  def truncate_text_to_approximate_size(s, max_bytes, options = {})
+  def truncate_text_to_approximate_size(str, max_bytes, options = {})
     front_weight = options.fetch(:front_weight, 0.5)
     raise "opts[:front_weight] must be between 0.0 and 1.0" if front_weight < 0.0 || front_weight > 1.0
-    return s if s.bytesize <= max_bytes
+    return str if str.bytesize <= max_bytes
 
     glue = "\n[...snip...]\n"
     max_bytes_in = [max_bytes - glue.bytesize, 1].max
-    bytes = s.dup.force_encoding("BINARY")
+    bytes = str.dup.force_encoding("BINARY")
     glue_bytes = glue.encode("BINARY")
     n_front_bytes = (max_bytes_in * front_weight).floor
     n_back_bytes = max_bytes_in - n_front_bytes

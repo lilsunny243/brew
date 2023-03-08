@@ -4260,6 +4260,12 @@ class Homebrew::CLI::Args
   extend ::T::Private::Methods::SingletonMethodHooks
 end
 
+class Homebrew::Completions::Variables
+  def self.[](*arg); end
+
+  def self.members(); end
+end
+
 module Homebrew::EnvConfig
   def self.additional_google_analytics_id(); end
 
@@ -4409,8 +4415,6 @@ module Homebrew::EnvConfig
 
   def self.temp(); end
 
-  def self.update_report_all_formulae?(); end
-
   def self.update_to_tag?(); end
 
   def self.verbose?(); end
@@ -4437,6 +4441,12 @@ class Homebrew::Livecheck::Strategy::Sparkle::Item
 end
 
 class Homebrew::Livecheck::Strategy::Sparkle::Item
+  def self.[](*arg); end
+
+  def self.members(); end
+end
+
+class Homebrew::Manpages::Variables
   def self.[](*arg); end
 
   def self.members(); end
@@ -4918,6 +4928,8 @@ module Minitest::Expectations
 
   def must_output(*args); end
 
+  def must_pattern_match(*args); end
+
   def must_raise(*args); end
 
   def must_respond_to(*args); end
@@ -4951,6 +4963,8 @@ module Minitest::Expectations
   def wont_include(*args); end
 
   def wont_match(*args); end
+
+  def wont_pattern_match(*args); end
 
   def wont_respond_to(*args); end
 end
@@ -5400,6 +5414,7 @@ class Object
   TARGET_MAN_PATH = ::T.let(nil, ::T.untyped)
   TESTBALL_PATCHES_SHA256 = ::T.let(nil, ::T.untyped)
   TESTBALL_SHA256 = ::T.let(nil, ::T.untyped)
+  TEST_DIRECTORIES = ::T.let(nil, ::T.untyped)
   TEST_FIXTURE_DIR = ::T.let(nil, ::T.untyped)
   TEST_SHA1 = ::T.let(nil, ::T.untyped)
   TEST_SHA256 = ::T.let(nil, ::T.untyped)
@@ -5615,6 +5630,10 @@ end
 
 class Parser::Ruby26
   Racc_debug_parser = ::T.let(nil, ::T.untyped)
+end
+
+class Parser::Source::Comment
+  include ::RuboCop::Ext::Comment
 end
 
 class PkgVersion
@@ -5875,6 +5894,22 @@ end
 
 class RSpec::Expectations::MultipleExpectationsNotMetError
   include ::RSpec::Core::MultipleExceptionError::InterfaceTag
+end
+
+module RSpec::Matchers
+  def a_json_string(*expected, &block_arg); end
+
+  def a_string_containing(*args, &block); end
+
+  def array_including_cons(*expected, &block_arg); end
+
+  def be_a_failure(*args, &block); end
+
+  def have_failed(*args, &block); end
+
+  def not_raise_error(*args, &block); end
+
+  def not_to_output(*args, &block); end
 end
 
 module Racc
@@ -6612,13 +6647,18 @@ module RuboCop::AST::NodePattern::Sets
   SET_BASH_COMPLETION_ZSH_COMPLETION_FISH_COMPLETION = ::T.let(nil, ::T.untyped)
   SET_BUILD_RECOMMENDED_TEST_OPTIONAL = ::T.let(nil, ::T.untyped)
   SET_DEPENDS_ON_USES_FROM_MACOS = ::T.let(nil, ::T.untyped)
+  SET_FILE_FILETEST = ::T.let(nil, ::T.untyped)
+  SET_FILE_TEMPFILE_STRINGIO = ::T.let(nil, ::T.untyped)
   SET_INCLUDE_WITH_WITHOUT = ::T.let(nil, ::T.untyped)
   SET_MAC_LINUX = ::T.let(nil, ::T.untyped)
-  SET_MODULE_FUNCTION_RUBY2_KEYWORDS = ::T.let(nil, ::T.untyped)
   SET_ON_INTEL_ON_ARM = ::T.let(nil, ::T.untyped)
   SET_OR_NEWER_OR_OLDER = ::T.let(nil, ::T.untyped)
+  SET_READ_BINREAD = ::T.let(nil, ::T.untyped)
+  SET_SKIP_PENDING = ::T.let(nil, ::T.untyped)
   SET_SYSTEM_SHELL_OUTPUT_PIPE_OUTPUT = ::T.let(nil, ::T.untyped)
   SET_WITH_WITHOUT = ::T.let(nil, ::T.untyped)
+  SET___10 = ::T.let(nil, ::T.untyped)
+  SET___9 = ::T.let(nil, ::T.untyped)
   SET____ETC_4 = ::T.let(nil, ::T.untyped)
 end
 
@@ -8298,17 +8338,79 @@ module Stdenv
 end
 
 class String
+  def acts_like_string?(); end
+
+  def at(position); end
+
+  def camelcase(first_letter=T.unsafe(nil)); end
+
+  def camelize(first_letter=T.unsafe(nil)); end
+
+  def classify(); end
+
+  def constantize(); end
+
+  def dasherize(); end
+
+  def deconstantize(); end
+
+  def demodulize(); end
+
   def exclude?(string); end
 
   def fast_xs(); end
+
+  def first(limit=T.unsafe(nil)); end
+
+  def foreign_key(separate_class_name_and_id_with_underscore=T.unsafe(nil)); end
+
+  def from(position); end
+
+  def html_safe(); end
+
+  def humanize(capitalize: T.unsafe(nil), keep_id_suffix: T.unsafe(nil)); end
 
   def indent(amount, indent_string=T.unsafe(nil), indent_empty_lines=T.unsafe(nil)); end
 
   def indent!(amount, indent_string=T.unsafe(nil), indent_empty_lines=T.unsafe(nil)); end
 
+  def is_utf8?(); end
+
+  def last(limit=T.unsafe(nil)); end
+
+  def mb_chars(); end
+
+  def parameterize(separator: T.unsafe(nil), preserve_case: T.unsafe(nil), locale: T.unsafe(nil)); end
+
+  def pluralize(count=T.unsafe(nil), locale=T.unsafe(nil)); end
+
+  def remove(*patterns); end
+
+  def remove!(*patterns); end
+
+  def safe_constantize(); end
+
   def shellescape(); end
 
   def shellsplit(); end
+
+  def singularize(locale=T.unsafe(nil)); end
+
+  def squish(); end
+
+  def squish!(); end
+
+  def tableize(); end
+
+  def titlecase(keep_id_suffix: T.unsafe(nil)); end
+
+  def titleize(keep_id_suffix: T.unsafe(nil)); end
+
+  def to(position); end
+
+  def to_date(); end
+
+  def to_datetime(); end
 
   def to_nfc(); end
 
@@ -8317,6 +8419,18 @@ class String
   def to_nfkc(); end
 
   def to_nfkd(); end
+
+  def to_time(form=T.unsafe(nil)); end
+
+  def truncate(truncate_at, options=T.unsafe(nil)); end
+
+  def truncate_bytes(truncate_at, omission: T.unsafe(nil)); end
+
+  def truncate_words(words_count, options=T.unsafe(nil)); end
+
+  def underscore(); end
+
+  def upcase_first(); end
 end
 
 class StringScanner
@@ -8381,46 +8495,6 @@ class TracePoint
   def instruction_sequence(); end
 
   def parameters(); end
-end
-
-module Tty
-  def self.blue(); end
-
-  def self.bold(); end
-
-  def self.cyan(); end
-
-  def self.default(); end
-
-  def self.down(); end
-
-  def self.erase_char(); end
-
-  def self.erase_line(); end
-
-  def self.green(); end
-
-  def self.italic(); end
-
-  def self.left(); end
-
-  def self.magenta(); end
-
-  def self.no_underline(); end
-
-  def self.red(); end
-
-  def self.reset(); end
-
-  def self.right(); end
-
-  def self.strikethrough(); end
-
-  def self.underline(); end
-
-  def self.up(); end
-
-  def self.yellow(); end
 end
 
 module URI
