@@ -2,13 +2,10 @@
 # frozen_string_literal: true
 
 require "formula"
-require "ostruct"
 require "completions"
 require "manpages"
 
 module Homebrew
-  extend T::Sig
-
   module_function
 
   sig { returns(CLI::Parser) }

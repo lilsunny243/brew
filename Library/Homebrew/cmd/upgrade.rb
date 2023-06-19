@@ -5,14 +5,12 @@ require "cli/parser"
 require "formula_installer"
 require "install"
 require "upgrade"
-require "cask/cmd"
 require "cask/utils"
+require "cask/upgrade"
 require "cask/macos"
 require "api"
 
 module Homebrew
-  extend T::Sig
-
   module_function
 
   sig { returns(CLI::Parser) }
@@ -87,8 +85,30 @@ module Homebrew
           description: "Treat all named arguments as casks. If no named arguments " \
                        "are specified, upgrade only outdated casks.",
         }],
-        *Cask::Cmd::AbstractCommand::OPTIONS.map(&:dup),
-        *Cask::Cmd::Upgrade::OPTIONS.map(&:dup),
+        [:switch, "--skip-cask-deps", {
+          description: "Skip installing cask dependencies.",
+        }],
+        [:switch, "-g", "--greedy", {
+          description: "Also include casks with `auto_updates true` or `version :latest`.",
+        }],
+        [:switch, "--greedy-latest", {
+          description: "Also include casks with `version :latest`.",
+        }],
+        [:switch, "--greedy-auto-updates", {
+          description: "Also include casks with `auto_updates true`.",
+        }],
+        [:switch, "--[no-]binaries", {
+          description: "Disable/enable linking of helper executables (default: enabled).",
+          env:         :cask_opts_binaries,
+        }],
+        [:switch, "--require-sha",  {
+          description: "Require all casks to have a checksum.",
+          env:         :cask_opts_require_sha,
+        }],
+        [:switch, "--[no-]quarantine", {
+          description: "Disable/enable quarantining of downloads (default: enabled).",
+          env:         :cask_opts_quarantine,
+        }],
       ].each do |args|
         options = args.pop
         send(*args, **options)
@@ -230,7 +250,7 @@ module Homebrew
   def upgrade_outdated_casks(casks, args:)
     return false if args.formula?
 
-    Cask::Cmd::Upgrade.upgrade_casks(
+    Cask::Upgrade.upgrade_casks(
       *casks,
       force:               args.force?,
       greedy:              args.greedy?,

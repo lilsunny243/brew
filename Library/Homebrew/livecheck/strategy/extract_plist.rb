@@ -19,8 +19,6 @@ module Homebrew
       #
       # @api private
       class ExtractPlist
-        extend T::Sig
-
         # A priority of zero causes livecheck to skip the strategy. We do this
         # for {ExtractPlist} so we can selectively apply it when appropriate.
         PRIORITY = 0
@@ -43,8 +41,6 @@ module Homebrew
           :bundle_version,
           keyword_init: true,
         ) do
-          extend T::Sig
-
           extend Forwardable
 
           # @api public
@@ -64,7 +60,7 @@ module Homebrew
           params(
             items: T::Hash[String, Item],
             regex: T.nilable(Regexp),
-            block: T.untyped,
+            block: T.nilable(Proc),
           ).returns(T::Array[String])
         }
         def self.versions_from_items(items, regex = nil, &block)
@@ -92,7 +88,7 @@ module Homebrew
             url:     T.nilable(String),
             regex:   T.nilable(Regexp),
             _unused: T.nilable(T::Hash[Symbol, T.untyped]),
-            block:   T.untyped,
+            block:   T.nilable(Proc),
           ).returns(T::Hash[Symbol, T.untyped])
         }
         def self.find_versions(cask:, url: nil, regex: nil, **_unused, &block)

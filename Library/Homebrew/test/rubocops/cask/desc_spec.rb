@@ -1,12 +1,8 @@
-# typed: false
 # frozen_string_literal: true
 
 require "rubocops/rubocop-cask"
-require "test/rubocops/cask/shared_examples/cask_cop"
 
-describe RuboCop::Cop::Cask::Desc do
-  subject(:cop) { described_class.new }
-
+describe RuboCop::Cop::Cask::Desc, :config do
   it "does not start with an article" do
     expect_no_offenses <<~RUBY
       cask "foo" do

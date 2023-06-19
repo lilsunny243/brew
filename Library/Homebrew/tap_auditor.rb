@@ -6,8 +6,6 @@ module Homebrew
   #
   # @api private
   class TapAuditor
-    extend T::Sig
-
     attr_reader :name, :path, :formula_names, :formula_aliases, :cask_tokens,
                 :tap_audit_exceptions, :tap_style_exceptions, :tap_pypi_formula_mappings, :problems
 
@@ -21,7 +19,9 @@ module Homebrew
       @tap_pypi_formula_mappings = tap.pypi_formula_mappings
       @problems                  = []
 
-      @formula_aliases = tap.aliases
+      @formula_aliases = tap.aliases.map do |formula_alias|
+        formula_alias.split("/").last
+      end
       @formula_names = tap.formula_names.map do |formula_name|
         formula_name.split("/").last
       end
@@ -52,7 +52,7 @@ module Homebrew
 
     sig { params(message: String).void }
     def problem(message)
-      @problems << ({ message: message, location: nil })
+      @problems << ({ message: message, location: nil, corrected: false })
     end
 
     private

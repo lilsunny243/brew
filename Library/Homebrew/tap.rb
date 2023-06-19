@@ -14,12 +14,11 @@ require "settings"
 # {#user} represents the GitHub username and {#repo} represents the repository
 # name without the leading `homebrew-`.
 class Tap
-  extend T::Sig
-
   extend Cachable
 
   TAP_DIRECTORY = (HOMEBREW_LIBRARY/"Taps").freeze
 
+  HOMEBREW_TAP_CASK_RENAMES_FILE = "cask_renames.json"
   HOMEBREW_TAP_FORMULA_RENAMES_FILE = "formula_renames.json"
   HOMEBREW_TAP_MIGRATIONS_FILE = "tap_migrations.json"
   HOMEBREW_TAP_AUDIT_EXCEPTIONS_DIR = "audit_exceptions"
@@ -28,6 +27,7 @@ class Tap
 
   HOMEBREW_TAP_JSON_FILES = %W[
     #{HOMEBREW_TAP_FORMULA_RENAMES_FILE}
+    #{HOMEBREW_TAP_CASK_RENAMES_FILE}
     #{HOMEBREW_TAP_MIGRATIONS_FILE}
     #{HOMEBREW_TAP_AUDIT_EXCEPTIONS_DIR}/*.json
     #{HOMEBREW_TAP_STYLE_EXCEPTIONS_DIR}/*.json
@@ -93,7 +93,12 @@ class Tap
 
   # The local path to this {Tap}.
   # e.g. `/usr/local/Library/Taps/user/homebrew-repo`
+  sig { returns(Pathname) }
   attr_reader :path
+
+  # The git repository of this {Tap}.
+  sig { returns(GitRepository) }
+  attr_reader :git_repo
 
   # @private
   def initialize(user, repo)
@@ -102,7 +107,7 @@ class Tap
     @name = "#{@user}/#{@repo}".downcase
     @full_name = "#{@user}/homebrew-#{@repo}"
     @path = TAP_DIRECTORY/@full_name.downcase
-    @path.extend(GitRepositoryExtension)
+    @git_repo = GitRepository.new(@path)
     @alias_table = nil
     @alias_reverse_table = nil
   end
@@ -136,7 +141,7 @@ class Tap
   def remote
     return default_remote unless installed?
 
-    @remote ||= path.git_origin
+    @remote ||= git_repo.origin_url
   end
 
   # The remote repository name of this {Tap}.
@@ -164,28 +169,28 @@ class Tap
 
   # True if this {Tap} is a Git repository.
   def git?
-    path.git?
+    git_repo.git_repo?
   end
 
   # git branch for this {Tap}.
   def git_branch
     raise TapUnavailableError, name unless installed?
 
-    path.git_branch
+    git_repo.branch_name
   end
 
   # git HEAD for this {Tap}.
   def git_head
     raise TapUnavailableError, name unless installed?
 
-    @git_head ||= path.git_head
+    @git_head ||= git_repo.head_ref
   end
 
   # Time since last git commit for this {Tap}.
   def git_last_commit
     raise TapUnavailableError, name unless installed?
 
-    path.git_last_commit
+    git_repo.last_committed
   end
 
   # The issues URL of this {Tap}.
@@ -386,20 +391,20 @@ class Tap
       $stderr.ohai "#{name}: changed remote from #{remote} to #{requested_remote}" unless quiet
     end
 
-    current_upstream_head = path.git_origin_branch
-    return if requested_remote.blank? && path.git_origin_has_branch?(current_upstream_head)
+    current_upstream_head = T.must(git_repo.origin_branch_name)
+    return if requested_remote.blank? && git_repo.origin_has_branch?(current_upstream_head)
 
     args = %w[fetch]
     args << "--quiet" if quiet
     args << "origin"
     safe_system "git", "-C", path, *args
-    path.git_origin_set_head_auto
+    git_repo.set_head_origin_auto
 
-    new_upstream_head = path.git_origin_branch
+    new_upstream_head = T.must(git_repo.origin_branch_name)
     return if new_upstream_head == current_upstream_head
 
-    path.git_rename_branch old: current_upstream_head, new: new_upstream_head
-    path.git_branch_set_upstream local: new_upstream_head, origin: new_upstream_head
+    git_repo.rename_branch old: current_upstream_head, new: new_upstream_head
+    git_repo.set_upstream_branch local: new_upstream_head, origin: new_upstream_head
 
     return if quiet
 
@@ -475,15 +480,15 @@ class Tap
     contents = []
 
     if (command_count = command_files.count).positive?
-      contents << "#{command_count} #{Utils.pluralize("command", command_count)}"
+      contents << Utils.pluralize("command", command_count, include_count: true)
     end
 
     if (cask_count = cask_files.count).positive?
-      contents << "#{cask_count} #{Utils.pluralize("cask", cask_count)}"
+      contents << Utils.pluralize("cask", cask_count, include_count: true)
     end
 
     if (formula_count = formula_files.count).positive?
-      contents << "#{formula_count} #{Utils.pluralize("formula", formula_count, plural: "e")}"
+      contents << Utils.pluralize("formula", formula_count, plural: "e", include_count: true)
     end
 
     contents
@@ -498,7 +503,7 @@ class Tap
         formula_dir.find
       else
         formula_dir.children
-      end.select(&method(:ruby_file?))
+      end.select(&method(:formula_file?))
     else
       []
     end
@@ -561,7 +566,7 @@ class Tap
     file.extname == ".rb"
   end
 
-  # return true if given path would present a {Formula} file in this {Tap}.
+  # returns true if given path would present a {Formula} file in this {Tap}.
   # accepts both absolute path and relative path (relative to this {Tap}'s path)
   # @private
   sig { params(file: T.any(String, Pathname)).returns(T::Boolean) }
@@ -569,11 +574,12 @@ class Tap
     file = Pathname.new(file) unless file.is_a? Pathname
     file = file.expand_path(path)
     return false unless ruby_file?(file)
+    return false if cask_file?(file)
 
     file.to_s.start_with?("#{formula_dir}/")
   end
 
-  # return true if given path would present a {Cask} file in this {Tap}.
+  # returns true if given path would present a {Cask} file in this {Tap}.
   # accepts both absolute path and relative path (relative to this {Tap}'s path)
   # @private
   sig { params(file: T.any(String, Pathname)).returns(T::Boolean) }
@@ -683,8 +689,20 @@ class Tap
     hash
   end
 
+  # Hash with tap cask renames.
+  sig { returns(T::Hash[String, String]) }
+  def cask_renames
+    @cask_renames ||= if name == "homebrew/cask" && !Homebrew::EnvConfig.no_install_from_api?
+      Homebrew::API::Cask.all_renames
+    elsif (rename_file = path/HOMEBREW_TAP_CASK_RENAMES_FILE).file?
+      JSON.parse(rename_file.read)
+    else
+      {}
+    end
+  end
+
   # Hash with tap formula renames.
-  sig { returns(Hash) }
+  sig { returns(T::Hash[String, String]) }
   def formula_renames
     @formula_renames ||= if (rename_file = path/HOMEBREW_TAP_FORMULA_RENAMES_FILE).file?
       JSON.parse(rename_file.read)
@@ -843,8 +861,6 @@ end
 
 # A specialized {Tap} class for the core formulae.
 class CoreTap < Tap
-  extend T::Sig
-
   # @private
   sig { void }
   def initialize
@@ -870,7 +886,7 @@ class CoreTap < Tap
 
   sig { returns(String) }
   def remote
-    super if installed? || Homebrew::EnvConfig.no_install_from_api?
+    super if Homebrew::EnvConfig.no_install_from_api?
 
     Homebrew::EnvConfig.core_git_remote
   end
@@ -929,11 +945,13 @@ class CoreTap < Tap
   end
 
   # @private
-  sig { returns(Hash) }
+  sig { returns(T::Hash[String, String]) }
   def formula_renames
-    @formula_renames ||= begin
+    @formula_renames ||= if Homebrew::EnvConfig.no_install_from_api?
       self.class.ensure_installed!
       super
+    else
+      Homebrew::API::Formula.all_renames
     end
   end
 
@@ -988,7 +1006,7 @@ class CoreTap < Tap
   # @private
   sig { returns(T::Array[String]) }
   def aliases
-    return super if installed? || Homebrew::EnvConfig.no_install_from_api?
+    return super if Homebrew::EnvConfig.no_install_from_api?
 
     Homebrew::API::Formula.all_aliases.keys
   end
@@ -996,7 +1014,7 @@ class CoreTap < Tap
   # @private
   sig { returns(T::Array[String]) }
   def formula_names
-    return super if installed? || Homebrew::EnvConfig.no_install_from_api?
+    return super if Homebrew::EnvConfig.no_install_from_api?
 
     Homebrew::API::Formula.all_formulae.keys
   end
@@ -1004,8 +1022,6 @@ end
 
 # Permanent configuration per {Tap} using `git-config(1)`.
 class TapConfig
-  extend T::Sig
-
   attr_reader :tap
 
   sig { params(tap: Tap).void }

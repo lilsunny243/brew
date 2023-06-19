@@ -11,11 +11,10 @@ module Homebrew
   #
   # @api private
   module API
-    extend T::Sig
-
     extend Cachable
 
     HOMEBREW_CACHE_API = (HOMEBREW_CACHE/"api").freeze
+    HOMEBREW_CACHE_API_SOURCE = (HOMEBREW_CACHE/"api-source").freeze
 
     sig { params(endpoint: String).returns(Hash) }
     def self.fetch(endpoint)
@@ -58,7 +57,8 @@ module Homebrew
 
       skip_download = target.exist? &&
                       !target.empty? &&
-                      (Homebrew::EnvConfig.no_auto_update? ||
+                      (!Homebrew.auto_update_command? ||
+                        Homebrew::EnvConfig.no_auto_update? ||
                       ((Time.now - Homebrew::EnvConfig.api_auto_update_secs.to_i) < target.mtime))
       skip_download ||= Homebrew.running_as_root_but_not_owned_by_root?
 
@@ -115,48 +115,6 @@ module Homebrew
       end
     end
 
-    sig { params(name: String, git_head: T.nilable(String), sha256: T.nilable(String)).returns(String) }
-    def self.fetch_homebrew_cask_source(name, git_head: nil, sha256: nil)
-      # TODO: unify with formula logic (https://github.com/Homebrew/brew/issues/14746)
-      git_head = "master" if git_head.blank?
-      raw_endpoint = "#{git_head}/Casks/#{name}.rb"
-      return cache[raw_endpoint] if cache.present? && cache.key?(raw_endpoint)
-
-      # This API sometimes returns random 404s so needs a fallback at formulae.brew.sh.
-      raw_source_url = "https://raw.githubusercontent.com/Homebrew/homebrew-cask/#{raw_endpoint}"
-      api_source_url = "#{HOMEBREW_API_DEFAULT_DOMAIN}/cask-source/#{name}.rb"
-
-      url = raw_source_url
-      output = Utils::Curl.curl_output("--fail", url)
-
-      if !output.success? || output.blank?
-        url = api_source_url
-        output = Utils::Curl.curl_output("--fail", url)
-        if !output.success? || output.blank?
-          raise ArgumentError, <<~EOS
-            No valid file found at either of:
-            #{Tty.underline}#{raw_source_url}#{Tty.reset}
-            #{Tty.underline}#{api_source_url}#{Tty.reset}
-          EOS
-        end
-      end
-
-      cask_source = output.stdout
-      actual_sha256 = Digest::SHA256.hexdigest(cask_source)
-      if sha256 && actual_sha256 != sha256
-        raise ArgumentError, <<~EOS
-          SHA256 mismatch
-          Expected: #{Formatter.success(sha256.to_s)}
-            Actual: #{Formatter.error(actual_sha256.to_s)}
-               URL: #{url}
-          Check if you can access the URL in your browser.
-          Regardless, try again in a few minutes.
-        EOS
-      end
-
-      cache[raw_endpoint] = cask_source
-    end
-
     sig { params(json: Hash).returns(Hash) }
     def self.merge_variations(json)
       bottle_tag = ::Utils::Bottles::Tag.new(system: Homebrew::SimulateSystem.current_os,
@@ -205,6 +163,17 @@ module Homebrew
       end
 
       [true, JSON.parse(json_data["payload"])]
+    end
+
+    sig { params(path: Pathname).returns(T.nilable(Tap)) }
+    def self.tap_from_source_download(path)
+      source_relative_path = path.relative_path_from(Homebrew::API::HOMEBREW_CACHE_API_SOURCE)
+      return if source_relative_path.to_s.start_with?("../")
+
+      org, repo = source_relative_path.each_filename.first(2)
+      return if org.blank? || repo.blank?
+
+      Tap.fetch(org, repo)
     end
   end
 end

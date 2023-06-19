@@ -3,9 +3,6 @@
 
 require "cask/artifact/abstract_artifact"
 
-require "extend/hash_validator"
-using HashValidator
-
 module Cask
   module Artifact
     # Artifact corresponding to the `installer` stanza.
@@ -21,9 +18,8 @@ module Cask
       module ManualInstaller
         def install_phase(**)
           puts <<~EOS
-            To complete the installation of Cask #{cask}, you must also
-            run the installer at:
-              #{cask.staged_path.join(path)}
+            Cask #{cask} only provides a manual installer. To run it and complete the installation:
+              open #{cask.staged_path.join(path).to_s.shellescape}
           EOS
         end
       end
@@ -60,14 +56,14 @@ module Cask
           args = { script: args }
         end
 
-        unless args.keys.count == 1
+        if args.keys.count != 1
           raise CaskInvalidError.new(
             cask,
             "invalid 'installer' stanza: Only one of #{VALID_KEYS.inspect} is permitted.",
           )
         end
 
-        args.assert_valid_keys!(*VALID_KEYS)
+        args.assert_valid_keys(*VALID_KEYS)
         new(cask, **args)
       end
 

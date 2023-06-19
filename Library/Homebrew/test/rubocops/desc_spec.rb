@@ -1,4 +1,3 @@
-# typed: false
 # frozen_string_literal: true
 
 require "rubocops/desc"
@@ -10,7 +9,7 @@ describe RuboCop::Cop::FormulaAudit::Desc do
     it "reports an offense when there is no `desc`" do
       expect_offense(<<~RUBY)
         class Foo < Formula
-        ^^^^^^^^^^^^^^^^^^^ Formula should have a desc (Description).
+        ^^^^^^^^^^^^^^^^^^^ FormulaAudit/Desc: Formula should have a desc (Description).
           url 'https://brew.sh/foo-1.0.tgz'
         end
       RUBY
@@ -21,7 +20,7 @@ describe RuboCop::Cop::FormulaAudit::Desc do
         class Foo < Formula
           url 'https://brew.sh/foo-1.0.tgz'
           desc ''
-          ^^^^^^^ The desc (description) should not be an empty string.
+          ^^^^^^^ FormulaAudit/Desc: The desc (description) should not be an empty string.
         end
       RUBY
     end
@@ -31,7 +30,7 @@ describe RuboCop::Cop::FormulaAudit::Desc do
         class Foo < Formula
           url 'https://brew.sh/foo-1.0.tgz'
           desc 'Bar#{"bar" * 29}'
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Description is too long. It should be less than 80 characters. The current length is 90.
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ FormulaAudit/Desc: Description is too long. It should be less than 80 characters. The current length is 90.
         end
       RUBY
     end
@@ -42,7 +41,7 @@ describe RuboCop::Cop::FormulaAudit::Desc do
           url 'https://brew.sh/foo-1.0.tgz'
           desc 'Bar#{"bar" * 9}'\
             '#{"foo" * 21}'
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Description is too long. It should be less than 80 characters. The current length is 93.
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ FormulaAudit/Desc: Description is too long. It should be less than 80 characters. The current length is 93.
         end
       RUBY
     end
@@ -54,7 +53,7 @@ describe RuboCop::Cop::FormulaAudit::Desc do
         class Foo < Formula
           url 'https://brew.sh/foo-1.0.tgz'
           desc ' Description with a leading space'
-                ^ Description shouldn't have leading spaces.
+                ^ FormulaAudit/Desc: Description shouldn't have leading spaces.
         end
       RUBY
     end
@@ -64,7 +63,7 @@ describe RuboCop::Cop::FormulaAudit::Desc do
         class Foo < Formula
           url 'https://brew.sh/foo-1.0.tgz'
           desc 'Description with a trailing space '
-                                                 ^ Description shouldn't have trailing spaces.
+                                                 ^ FormulaAudit/Desc: Description shouldn't have trailing spaces.
         end
       RUBY
     end
@@ -74,8 +73,8 @@ describe RuboCop::Cop::FormulaAudit::Desc do
         class Foo < Formula
           url 'https://brew.sh/foo-1.0.tgz'
           desc 'command line'
-                ^ Description should start with a capital letter.
-                ^^^^^^^^^^^^ Description should use "command-line" instead of "command line".
+                ^ FormulaAudit/Desc: Description should start with a capital letter.
+                ^^^^^^^^^^^^ FormulaAudit/Desc: Description should use "command-line" instead of "command line".
         end
       RUBY
     end
@@ -85,7 +84,7 @@ describe RuboCop::Cop::FormulaAudit::Desc do
         class Foo < Formula
           url 'https://brew.sh/foo-1.0.tgz'
           desc 'An aardvark'
-                ^^ Description shouldn't start with an article.
+                ^^ FormulaAudit/Desc: Description shouldn't start with an article.
         end
       RUBY
 
@@ -93,7 +92,7 @@ describe RuboCop::Cop::FormulaAudit::Desc do
         class Foo < Formula
           url 'https://brew.sh/foo-1.0.tgz'
           desc 'The aardvark'
-                ^^^ Description shouldn't start with an article.
+                ^^^ FormulaAudit/Desc: Description shouldn't start with an article.
         end
       RUBY
     end
@@ -103,7 +102,7 @@ describe RuboCop::Cop::FormulaAudit::Desc do
         class Foo < Formula
           url 'https://brew.sh/foo-1.0.tgz'
           desc 'bar'
-                ^ Description should start with a capital letter.
+                ^ FormulaAudit/Desc: Description should start with a capital letter.
         end
       RUBY
     end
@@ -113,7 +112,7 @@ describe RuboCop::Cop::FormulaAudit::Desc do
         class Foo < Formula
           url 'https://brew.sh/foo-1.0.tgz'
           desc 'Foo is a foobar'
-                ^^^ Description shouldn't start with the formula name.
+                ^^^ FormulaAudit/Desc: Description shouldn't start with the formula name.
         end
       RUBY
     end
@@ -123,7 +122,7 @@ describe RuboCop::Cop::FormulaAudit::Desc do
         class Foo < Formula
           url 'https://brew.sh/foo-1.0.tgz'
           desc 'Description with a full stop at the end.'
-                                                       ^ Description shouldn't end with a full stop.
+                                                       ^ FormulaAudit/Desc: Description shouldn't end with a full stop.
         end
       RUBY
 
@@ -149,9 +148,9 @@ describe RuboCop::Cop::FormulaAudit::Desc do
         class Foo < Formula
           url 'https://brew.sh/foo-1.0.tgz'
           desc ' an bar: commandline foo '
-                                        ^ Description shouldn't have trailing spaces.
-                         ^^^^^^^^^^^ Description should use "command-line" instead of "commandline".
-                ^ Description shouldn't have leading spaces.
+                                        ^ FormulaAudit/Desc: Description shouldn't have trailing spaces.
+                         ^^^^^^^^^^^ FormulaAudit/Desc: Description should use "command-line" instead of "commandline".
+                ^ FormulaAudit/Desc: Description shouldn't have leading spaces.
         end
       RUBY
 

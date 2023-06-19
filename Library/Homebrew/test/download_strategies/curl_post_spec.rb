@@ -1,4 +1,3 @@
-# typed: false
 # frozen_string_literal: true
 
 require "download_strategy"
@@ -10,15 +9,34 @@ describe CurlPostDownloadStrategy do
   let(:url) { "https://example.com/foo.tar.gz" }
   let(:version) { "1.2.3" }
   let(:specs) { {} }
+  let(:head_response) do
+    <<~HTTP
+      HTTP/1.1 200\r
+      Content-Disposition: attachment; filename="foo.tar.gz"
+    HTTP
+  end
 
   describe "#fetch" do
     before do
+      allow(strategy).to receive(:system_command)
+        .with(
+          /curl/,
+          hash_including(args: array_including("--head")),
+        )
+        .twice
+        .and_return(instance_double(
+                      SystemCommand::Result,
+                      success?:    true,
+                      exit_status: instance_double(Process::Status, exitstatus: 0),
+                      stdout:      head_response,
+                    ))
+
       strategy.temporary_path.dirname.mkpath
       FileUtils.touch strategy.temporary_path
     end
 
     context "with :using and :data specified" do
-      let(:specs) {
+      let(:specs) do
         {
           using: :post,
           data:  {
@@ -26,7 +44,7 @@ describe CurlPostDownloadStrategy do
             is:   "good",
           },
         }
-      }
+      end
 
       it "adds the appropriate curl args" do
         expect(strategy).to receive(:system_command)

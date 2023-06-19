@@ -7,8 +7,6 @@ require "requirement"
 #
 # @api private
 class MacOSRequirement < Requirement
-  extend T::Sig
-
   fatal true
 
   attr_reader :comparator, :version
@@ -23,11 +21,11 @@ class MacOSRequirement < Requirement
   def initialize(tags = [], comparator: ">=")
     @version = begin
       if comparator == "==" && tags.first.respond_to?(:map)
-        tags.first.map { |s| MacOS::Version.from_symbol(s) }
+        tags.first.map { |s| MacOSVersion.from_symbol(s) }
       else
-        MacOS::Version.from_symbol(tags.first) unless tags.empty?
+        MacOSVersion.from_symbol(tags.first) unless tags.empty?
       end
-    rescue MacOSVersionError => e
+    rescue MacOSVersion::Error => e
       if DISABLED_MACOS_VERSIONS.include?(e.version)
         odisabled "depends_on :macos => :#{e.version}"
       elsif DEPRECATED_MACOS_VERSIONS.include?(e.version)
@@ -43,7 +41,7 @@ class MacOSRequirement < Requirement
       end
 
       # Otherwise fallback to the oldest allowed if comparator is >=.
-      MacOS::Version.new(HOMEBREW_MACOS_OLDEST_ALLOWED) if comparator == ">="
+      MacOSVersion.new(HOMEBREW_MACOS_OLDEST_ALLOWED) if comparator == ">="
     end
 
     @comparator = comparator
@@ -56,7 +54,7 @@ class MacOSRequirement < Requirement
 
   satisfy(build_env: false) do
     T.bind(self, MacOSRequirement)
-    next Array(@version).any? { |v| MacOS.version.public_send(@comparator, v) } if OS.mac? && version_specified?
+    next Array(@version).any? { |v| OS::Mac.version.compare(@comparator, v) } if OS.mac? && version_specified?
     next true if OS.mac?
     next true if @version
 

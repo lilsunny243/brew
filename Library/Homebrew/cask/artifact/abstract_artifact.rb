@@ -9,7 +9,6 @@ module Cask
     #
     # @api private
     class AbstractArtifact
-      extend T::Sig
       extend T::Helpers
       abstract!
 
@@ -82,6 +81,7 @@ module Cask
             Service,
             InputMethod,
             InternetPlugin,
+            KeyboardLayout,
             AudioUnitPlugin,
             VstPlugin,
             Vst3Plugin,

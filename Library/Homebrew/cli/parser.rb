@@ -15,8 +15,6 @@ HIDDEN_DESC_PLACEHOLDER = "@@HIDDEN@@"
 module Homebrew
   module CLI
     class Parser
-      extend T::Sig
-
       attr_reader :processed_options, :hide_from_man_page, :named_args_type
 
       def self.from_cmd_path(cmd_path)
@@ -36,6 +34,10 @@ module Homebrew
           [:flag, "--appdir=", {
             description: "Target location for Applications " \
                          "(default: `#{Cask::Config::DEFAULT_DIRS[:appdir]}`).",
+          }],
+          [:flag, "--keyboard-layoutdir=", {
+            description: "Target location for Keyboard Layouts " \
+                         "(default: `#{Cask::Config::DEFAULT_DIRS[:keyboard_layoutdir]}`).",
           }],
           [:flag, "--colorpickerdir=", {
             description: "Target location for Color Pickers " \
@@ -152,7 +154,7 @@ module Homebrew
       end
 
       def switch(*names, description: nil, replacement: nil, env: nil, depends_on: nil,
-                 method: :on, hidden: false)
+                 method: :on, hidden: false, disable: false)
         global_switch = names.first.is_a?(Symbol)
         return if global_switch
 
@@ -163,7 +165,7 @@ module Homebrew
           description += " (disabled#{"; replaced by #{replacement}" if replacement.present?})"
         end
         @parser.public_send(method, *names, *wrap_option_desc(description)) do |value|
-          odisabled "the `#{names.first}` switch", replacement unless replacement.nil?
+          odeprecated "the `#{names.first}` switch", replacement, disable: disable if !replacement.nil? || disable
           value = true if names.none? { |name| name.start_with?("--[no-]") }
 
           set_switch(*names, value: value, from: :args)
@@ -676,8 +678,6 @@ module Homebrew
     end
 
     class MaxNamedArgumentsError < UsageError
-      extend T::Sig
-
       sig { params(maximum: Integer, types: T::Array[Symbol]).void }
       def initialize(maximum, types: [])
         super case maximum
@@ -694,8 +694,6 @@ module Homebrew
     end
 
     class MinNamedArgumentsError < UsageError
-      extend T::Sig
-
       sig { params(minimum: Integer, types: T::Array[Symbol]).void }
       def initialize(minimum, types: [])
         types << :named if types.empty?
@@ -707,8 +705,6 @@ module Homebrew
     end
 
     class NumberOfNamedArgumentsError < UsageError
-      extend T::Sig
-
       sig { params(minimum: Integer, types: T::Array[Symbol]).void }
       def initialize(minimum, types: [])
         types << :named if types.empty?

@@ -1,4 +1,3 @@
-# typed: false
 # frozen_string_literal: true
 
 require "test/support/fixtures/testball"
@@ -207,14 +206,14 @@ describe Formula do
   example "installed alias with tap" do
     tap = Tap.new("user", "repo")
     name = "foo"
-    path = "#{tap.path}/Formula/#{name}.rb"
+    path = tap.path/"Formula/#{name}.rb"
     f = formula name, path: path do
       url "foo-1.0"
     end
 
     build_values_with_no_installed_alias = [
       BuildOptions.new(Options.new, f.options),
-      Tab.new(source: { "path" => f.path }),
+      Tab.new(source: { "path" => f.path.to_s }),
     ]
     build_values_with_no_installed_alias.each do |build|
       f.build = build
@@ -270,7 +269,7 @@ describe Formula do
 
   specify "#migration_needed" do
     f = Testball.new("newname")
-    f.instance_variable_set(:@oldname, "oldname")
+    f.instance_variable_set(:@oldnames, ["oldname"])
     f.instance_variable_set(:@tap, CoreTap.instance)
 
     oldname_prefix = (HOMEBREW_CELLAR/"oldname/2.20")
@@ -702,7 +701,7 @@ describe Formula do
         url "https://brew.sh/test-1.0.tbz"
       end
 
-      expect(f.service).to be_nil
+      expect(f.service.serialize).to eq({})
     end
 
     specify "service complicated" do
@@ -718,7 +717,8 @@ describe Formula do
           keep_alive true
         end
       end
-      expect(f.service).not_to be_nil
+      expect(f.service.serialize.keys)
+        .to contain_exactly(:run, :run_type, :error_log_path, :log_path, :working_dir, :keep_alive)
     end
 
     specify "service uses simple run" do
@@ -729,7 +729,20 @@ describe Formula do
         end
       end
 
-      expect(f.service).not_to be_nil
+      expect(f.service.serialize.keys).to contain_exactly(:run, :run_type)
+    end
+
+    specify "service with only custom names" do
+      f = formula do
+        url "https://brew.sh/test-1.0.tbz"
+        service do
+          name macos: "custom.macos.beanstalkd", linux: "custom.linux.beanstalkd"
+        end
+      end
+
+      expect(f.plist_name).to eq("custom.macos.beanstalkd")
+      expect(f.service_name).to eq("custom.linux.beanstalkd")
+      expect(f.service.serialize.keys).to contain_exactly(:name)
     end
 
     specify "service helpers return data" do
@@ -873,9 +886,9 @@ describe Formula do
 
     expect(Set.new(f2.recursive_requirements)).to eq(Set[])
     expect(
-      f2.recursive_requirements {
+      f2.recursive_requirements do
         # do nothing
-      }.to_set,
+      end.to_set,
     ).to eq(Set[xcode])
 
     requirements = f2.recursive_requirements do |_dependent, requirement|
@@ -930,14 +943,9 @@ describe Formula do
         end
       RUBY
     end
-    let(:expected_variations) {
+    let(:expected_variations) do
       <<~JSON
         {
-          "arm64_big_sur": {
-            "dependencies": [
-              "big-sur-formula"
-            ]
-          },
           "monterey": {
             "dependencies": [
               "intel-formula"
@@ -946,6 +954,11 @@ describe Formula do
           "big_sur": {
             "dependencies": [
               "intel-formula",
+              "big-sur-formula"
+            ]
+          },
+          "arm64_big_sur": {
+            "dependencies": [
               "big-sur-formula"
             ]
           },
@@ -969,7 +982,7 @@ describe Formula do
           }
         }
       JSON
-    }
+    end
 
     before do
       # Use a more limited symbols list to shorten the variations hash
@@ -979,10 +992,10 @@ describe Formula do
         catalina: "10.15",
         mojave:   "10.14",
       }
-      stub_const("MacOSVersions::SYMBOLS", symbols)
+      stub_const("MacOSVersion::SYMBOLS", symbols)
 
       # For consistency, always run on Monterey and ARM
-      allow(MacOS).to receive(:version).and_return(MacOS::Version.new("12"))
+      allow(MacOS).to receive(:version).and_return(MacOSVersion.new("12"))
       allow(Hardware::CPU).to receive(:type).and_return(:arm)
 
       formula_path.dirname.mkpath
@@ -1657,10 +1670,6 @@ describe Formula do
   end
 
   describe "#on_system" do
-    after do
-      Homebrew::SimulateSystem.clear
-    end
-
     let(:f) do
       Class.new(Testball) do
         attr_reader :foo
@@ -1680,50 +1689,47 @@ describe Formula do
     end
 
     it "doesn't call code on Ventura", :needs_macos do
-      Homebrew::SimulateSystem.os = :ventura
-      f.brew { f.install }
-      expect(f.foo).to eq(0)
-      expect(f.bar).to eq(0)
+      Homebrew::SimulateSystem.with os: :ventura do
+        f.brew { f.install }
+        expect(f.foo).to eq(0)
+        expect(f.bar).to eq(0)
+      end
     end
 
     it "calls code on Linux", :needs_linux do
-      Homebrew::SimulateSystem.os = :linux
-      f.brew { f.install }
-      expect(f.foo).to eq(1)
-      expect(f.bar).to eq(1)
+      Homebrew::SimulateSystem.with os: :linux do
+        f.brew { f.install }
+        expect(f.foo).to eq(1)
+        expect(f.bar).to eq(1)
+      end
     end
 
     it "calls code within `on_system :linux, macos: :monterey` on Monterey", :needs_macos do
-      Homebrew::SimulateSystem.os = :monterey
-      f.brew { f.install }
-      expect(f.foo).to eq(1)
-      expect(f.bar).to eq(0)
+      Homebrew::SimulateSystem.with os: :monterey do
+        f.brew { f.install }
+        expect(f.foo).to eq(1)
+        expect(f.bar).to eq(0)
+      end
     end
 
     it "calls code within `on_system :linux, macos: :big_sur_or_older` on Big Sur", :needs_macos do
-      Homebrew::SimulateSystem.os = :big_sur
-      f.brew { f.install }
-      expect(f.foo).to eq(0)
-      expect(f.bar).to eq(1)
+      Homebrew::SimulateSystem.with os: :big_sur do
+        f.brew { f.install }
+        expect(f.foo).to eq(0)
+        expect(f.bar).to eq(1)
+      end
     end
 
     it "calls code within `on_system :linux, macos: :big_sur_or_older` on Catalina", :needs_macos do
-      Homebrew::SimulateSystem.os = :catalina
-      f.brew { f.install }
-      expect(f.foo).to eq(0)
-      expect(f.bar).to eq(1)
+      Homebrew::SimulateSystem.with os: :catalina do
+        f.brew { f.install }
+        expect(f.foo).to eq(0)
+        expect(f.bar).to eq(1)
+      end
     end
   end
 
   describe "on_{os_version} blocks", :needs_macos do
-    before do
-      Homebrew::SimulateSystem.os = :monterey
-    end
-
-    after do
-      Homebrew::SimulateSystem.clear
-    end
-
     let(:f) do
       Class.new(Testball) do
         attr_reader :test
@@ -1744,33 +1750,38 @@ describe Formula do
     end
 
     it "only calls code within `on_monterey`" do
-      Homebrew::SimulateSystem.os = :monterey
-      f.brew { f.install }
-      expect(f.test).to eq(1)
+      Homebrew::SimulateSystem.with os: :monterey do
+        f.brew { f.install }
+        expect(f.test).to eq(1)
+      end
     end
 
     it "only calls code within `on_monterey :or_newer`" do
-      Homebrew::SimulateSystem.os = :ventura
-      f.brew { f.install }
-      expect(f.test).to eq(1)
+      Homebrew::SimulateSystem.with os: :ventura do
+        f.brew { f.install }
+        expect(f.test).to eq(1)
+      end
     end
 
     it "only calls code within `on_big_sur`" do
-      Homebrew::SimulateSystem.os = :big_sur
-      f.brew { f.install }
-      expect(f.test).to eq(2)
+      Homebrew::SimulateSystem.with os: :big_sur do
+        f.brew { f.install }
+        expect(f.test).to eq(2)
+      end
     end
 
     it "only calls code within `on_catalina`" do
-      Homebrew::SimulateSystem.os = :catalina
-      f.brew { f.install }
-      expect(f.test).to eq(3)
+      Homebrew::SimulateSystem.with os: :catalina do
+        f.brew { f.install }
+        expect(f.test).to eq(3)
+      end
     end
 
     it "only calls code within `on_catalina :or_older`" do
-      Homebrew::SimulateSystem.os = :mojave
-      f.brew { f.install }
-      expect(f.test).to eq(3)
+      Homebrew::SimulateSystem.with os: :mojave do
+        f.brew { f.install }
+        expect(f.test).to eq(3)
+      end
     end
   end
 

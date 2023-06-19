@@ -6,8 +6,6 @@ require "utils"
 
 # Raised when a command is used wrong.
 class UsageError < RuntimeError
-  extend T::Sig
-
   attr_reader :reason
 
   def initialize(reason = nil)
@@ -83,8 +81,6 @@ end
 
 # Raised when neither a formula nor a cask with the given name is available.
 class FormulaOrCaskUnavailableError < RuntimeError
-  extend T::Sig
-
   attr_reader :name
 
   def initialize(name)
@@ -111,8 +107,6 @@ end
 
 # Raised when a formula or cask in a specific tap is not available.
 class TapFormulaOrCaskUnavailableError < FormulaOrCaskUnavailableError
-  extend T::Sig
-
   attr_reader :tap
 
   def initialize(tap, name)
@@ -130,8 +124,6 @@ end
 
 # Raised when a formula is not available.
 class FormulaUnavailableError < FormulaOrCaskUnavailableError
-  extend T::Sig
-
   attr_accessor :dependent
 
   sig { returns(T.nilable(String)) }
@@ -149,8 +141,6 @@ end
 #
 # @api private
 module FormulaClassUnavailableErrorModule
-  extend T::Sig
-
   attr_reader :path, :class_name, :class_list
 
   def to_s
@@ -195,8 +185,6 @@ end
 #
 # @api private
 module FormulaUnreadableErrorModule
-  extend T::Sig
-
   attr_reader :formula_error
 
   sig { returns(String) }
@@ -404,8 +392,6 @@ end
 
 # Raised when a formula conflicts with another one.
 class FormulaConflictError < RuntimeError
-  extend T::Sig
-
   attr_reader :formula, :conflicts
 
   def initialize(formula, conflicts)
@@ -466,8 +452,6 @@ end
 
 # Raised when an error occurs during a formula build.
 class BuildError < RuntimeError
-  extend T::Sig
-
   attr_reader :cmd, :args, :env
   attr_accessor :formula, :options
 
@@ -619,13 +603,16 @@ class CompilerSelectionError < RuntimeError
   end
 end
 
-# Raised in {Resource#fetch}.
+# Raised in {Downloadable#fetch}.
 class DownloadError < RuntimeError
-  def initialize(resource, cause)
+  attr_reader :cause
+
+  def initialize(downloadable, cause)
     super <<~EOS
-      Failed to download resource #{resource.download_name.inspect}
+      Failed to download resource #{downloadable.download_name.inspect}
       #{cause.message}
     EOS
+    @cause = cause
     set_backtrace(cause.backtrace)
   end
 end
@@ -651,8 +638,6 @@ end
 
 # Raised by {Kernel#safe_system} in `utils.rb`.
 class ErrorDuringExecution < RuntimeError
-  extend T::Sig
-
   attr_reader :cmd, :status, :output
 
   def initialize(cmd, status:, output: nil, secrets: [])
@@ -779,16 +764,6 @@ class ChildProcessError < RuntimeError
 
     # Clobber our real (but irrelevant) backtrace with that of the inner exception.
     set_backtrace inner["b"]
-  end
-end
-
-# Raised when a macOS version is unsupported.
-class MacOSVersionError < RuntimeError
-  attr_reader :version
-
-  def initialize(version)
-    @version = version
-    super "unknown or unsupported macOS version: #{version.inspect}"
   end
 end
 

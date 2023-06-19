@@ -2,9 +2,11 @@
 # frozen_string_literal: true
 
 module Homebrew
-  extend T::Sig
-
   module_function
+
+  def no_changes_message
+    "No changes to formulae."
+  end
 
   def migrate_gcc_dependents_if_needed
     return if Settings.read("gcc-rpaths.fixed") == "true"

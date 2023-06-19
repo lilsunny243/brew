@@ -1,4 +1,3 @@
-# typed: false
 # frozen_string_literal: true
 
 require "api"
@@ -22,7 +21,7 @@ describe Homebrew::API::Cask do
   end
 
   describe "::all_casks" do
-    let(:casks_json) {
+    let(:casks_json) do
       <<~EOS
         [{
           "token": "foo",
@@ -32,28 +31,18 @@ describe Homebrew::API::Cask do
           "url": "https://brew.sh/bar"
         }]
       EOS
-    }
-    let(:casks_hash) {
+    end
+    let(:casks_hash) do
       {
         "foo" => { "url" => "https://brew.sh/foo" },
         "bar" => { "url" => "https://brew.sh/bar" },
       }
-    }
+    end
 
     it "returns the expected cask JSON list" do
       mock_curl_download stdout: casks_json
       casks_output = described_class.all_casks
       expect(casks_output).to eq casks_hash
-    end
-  end
-
-  describe "::fetch_source" do
-    it "fetches the source of a cask (defaulting to master when no `git_head` is passed)" do
-      curl_output = instance_double(SystemCommand::Result, stdout: "foo", success?: true)
-      expect(Utils::Curl).to receive(:curl_output)
-        .with("--fail", "https://raw.githubusercontent.com/Homebrew/homebrew-cask/master/Casks/foo.rb")
-        .and_return(curl_output)
-      described_class.fetch_source("foo", git_head: nil)
     end
   end
 end

@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "open3"
@@ -10,8 +10,6 @@ module Utils
   #
   # @api private
   module Curl
-    extend T::Sig
-
     using TimeRemaining
 
     # This regex is used to extract the part of an ETag within quotation marks,
@@ -56,6 +54,7 @@ module Utils
         show_output:     T.nilable(T::Boolean),
         show_error:      T.nilable(T::Boolean),
         user_agent:      T.any(String, Symbol, NilClass),
+        referer:         T.nilable(String),
       ).returns(T::Array[T.untyped])
     }
     def curl_args(
@@ -66,7 +65,8 @@ module Utils
       retry_max_time: nil,
       show_output: false,
       show_error: true,
-      user_agent: nil
+      user_agent: nil,
+      referer: nil
     )
       args = []
 
@@ -93,7 +93,7 @@ module Utils
 
       args << "--header" << "Accept-Language: en"
 
-      unless show_output == true
+      if show_output != true
         args << "--fail"
         args << "--progress-bar" unless Context.current.verbose?
         args << "--verbose" if Homebrew::EnvConfig.curl_verbose?
@@ -107,6 +107,8 @@ module Utils
       args << "--retry" << retries if retries&.positive?
 
       args << "--retry-max-time" << retry_max_time.round if retry_max_time.present?
+
+      args << "--referer" << referer if referer.present?
 
       args + extra_args
     end
@@ -137,7 +139,7 @@ module Utils
       raise Timeout::Error, result.stderr.lines.last.chomp if timeout && result.status.exitstatus == 28
 
       # Error in the HTTP2 framing layer
-      if result.status.exitstatus == 16
+      if result.exit_status == 16
         return curl_with_workarounds(
           *args, "--http1.1",
           timeout: end_time&.remaining, **command_options, **options
@@ -145,7 +147,7 @@ module Utils
       end
 
       # This is a workaround for https://github.com/curl/curl/issues/1618.
-      if result.status.exitstatus == 56 # Unexpected EOF
+      if result.exit_status == 56 # Unexpected EOF
         out = curl_output("-V").stdout
 
         # If `curl` doesn't support HTTP2, the exception is unrelated to this bug.
@@ -171,36 +173,62 @@ module Utils
       destination = Pathname(to)
       destination.dirname.mkpath
 
-      if try_partial
-        range_stdout = curl_output("--location", "--head", *args, **options).stdout
-        parsed_output = parse_curl_output(range_stdout)
+      args = ["--location", "--remote-time", "--output", destination, *args]
 
-        headers = if parsed_output[:responses].present?
-          parsed_output[:responses].last[:headers]
-        else
+      if try_partial
+        headers = begin
+          parsed_output = curl_headers(*args, **options, wanted_headers: ["accept-ranges"])
+          parsed_output.fetch(:responses).last&.fetch(:headers) || {}
+        rescue ErrorDuringExecution
+          # Ignore errors here and let actual download fail instead.
           {}
         end
 
-        # Any value for `accept-ranges` other than none indicates that the server supports partial requests.
-        # Its absence indicates no support.
-        supports_partial = headers.key?("accept-ranges") && headers["accept-ranges"] != "none"
+        # Any value for `Accept-Ranges` other than `none` indicates that the server
+        # supports partial requests. Its absence indicates no support.
+        supports_partial = headers.fetch("accept-ranges", "none") != "none"
+        content_length = headers["content-length"]&.to_i
 
-        if supports_partial &&
-           destination.exist? &&
-           destination.size == headers["content-length"].to_i
-          return # We've already downloaded all the bytes
+        if supports_partial && destination.exist?
+          # We've already downloaded all bytes.
+          return if destination.size == content_length
+
+          args = ["--continue-at", "-", *args]
         end
       end
-
-      args = ["--location", "--remote-time", "--output", destination, *args]
-      # continue-at shouldn't be used with servers that don't support partial requests.
-      args = ["--continue-at", "-", *args] if destination.exist? && supports_partial
 
       curl(*args, **options)
     end
 
     def curl_output(*args, **options)
       curl_with_workarounds(*args, print_stderr: false, show_output: true, **options)
+    end
+
+    def curl_headers(*args, wanted_headers: [], **options)
+      [[], ["--request", "GET"]].each do |request_args|
+        result = curl_output(
+          "--fail", "--location", "--silent", "--head", *request_args, *args,
+          **options
+        )
+
+        # 22 means a non-successful HTTP status code, not a `curl` error, so we still got some headers.
+        if result.success? || result.exit_status == 22
+          parsed_output = parse_curl_output(result.stdout)
+
+          if request_args.empty?
+            # If we didn't get any wanted header yet, retry using `GET`.
+            next if wanted_headers.any? &&
+                    parsed_output.fetch(:responses).none? { |r| (r.fetch(:headers).keys & wanted_headers).any? }
+
+            # Some CDNs respond with 400 codes for `HEAD` but resolve with `GET`.
+            next if (400..499).cover?(parsed_output.fetch(:responses).last&.fetch(:status_code).to_i)
+          end
+
+          return parsed_output if result.success?
+        end
+
+        result.assert_success!
+      end
     end
 
     # Check if a URL is protected by CloudFlare (e.g. badlion.net and jaxx.io).
@@ -238,13 +266,13 @@ module Utils
       set_cookie_header.compact.any? { |cookie| cookie.match?(/^(visid_incap|incap_ses)_/i) }
     end
 
-    def curl_check_http_content(url, url_type, specs: {}, user_agents: [:default],
+    def curl_check_http_content(url, url_type, specs: {}, user_agents: [:default], referer: nil,
                                 check_content: false, strict: false, use_homebrew_curl: false)
       return unless url.start_with? "http"
 
       secure_url = url.sub(/\Ahttp:/, "https:")
-      secure_details = nil
-      hash_needed = false
+      secure_details = T.let(nil, T.nilable(T::Hash[Symbol, T.untyped]))
+      hash_needed = T.let(false, T::Boolean)
       if url != secure_url
         user_agents.each do |user_agent|
           secure_details = begin
@@ -254,6 +282,7 @@ module Utils
               hash_needed:       true,
               use_homebrew_curl: use_homebrew_curl,
               user_agent:        user_agent,
+              referer:           referer,
             )
           rescue Timeout::Error
             next
@@ -267,7 +296,7 @@ module Utils
         end
       end
 
-      details = nil
+      details = T.let(nil, T.nilable(T::Hash[Symbol, T.untyped]))
       user_agents.each do |user_agent|
         details =
           curl_http_content_headers_and_checksum(
@@ -276,6 +305,7 @@ module Utils
             hash_needed:       hash_needed,
             use_homebrew_curl: use_homebrew_curl,
             user_agent:        user_agent,
+            referer:           referer,
           )
         break if http_status_ok?(details[:status_code])
       end
@@ -364,7 +394,7 @@ module Utils
 
     def curl_http_content_headers_and_checksum(
       url, specs: {}, hash_needed: false,
-      use_homebrew_curl: false, user_agent: :default
+      use_homebrew_curl: false, user_agent: :default, referer: nil
     )
       file = Tempfile.new.tap(&:close)
 
@@ -374,7 +404,7 @@ module Utils
         next [] if argument == false # No flag.
 
         args = ["--#{option.to_s.tr("_", "-")}"]
-        args << argument unless argument == true # It's a flag.
+        args << argument if argument != true # It's a flag.
         args
       end
 
@@ -385,7 +415,8 @@ module Utils
         connect_timeout:   15,
         max_time:          max_time,
         retry_max_time:    max_time,
-        user_agent:        user_agent
+        user_agent:        user_agent,
+        referer:           referer
       )
 
       parsed_output = parse_curl_output(output)
@@ -414,7 +445,7 @@ module Utils
             # Unknown charset in Content-Type header
           end
         end
-        file_contents = File.read(file.path, **open_args)
+        file_contents = File.read(T.must(file.path), **open_args)
         file_hash = Digest::SHA2.hexdigest(file_contents) if hash_needed
       end
 
@@ -430,7 +461,7 @@ module Utils
         responses:      responses,
       }
     ensure
-      file.unlink
+      T.must(file).unlink
     end
 
     def curl_supports_tls13?
@@ -547,7 +578,7 @@ module Utils
       return response unless response_text.match?(HTTP_STATUS_LINE_REGEX)
 
       # Parse the status line and remove it
-      match = response_text.match(HTTP_STATUS_LINE_REGEX)
+      match = T.must(response_text.match(HTTP_STATUS_LINE_REGEX))
       response[:status_code] = match["code"] if match["code"].present?
       response[:status_text] = match["text"] if match["text"].present?
       response_text = response_text.sub(%r{^HTTP/.* (\d+).*$\s*}, "")

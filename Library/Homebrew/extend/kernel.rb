@@ -4,8 +4,6 @@
 # Contains shorthand Homebrew utility methods like `ohai`, `opoo`, `odisabled`.
 # TODO: move these out of `Kernel`.
 module Kernel
-  extend T::Sig
-
   def require?(path)
     return false if path.nil?
 
@@ -79,6 +77,7 @@ module Kernel
     Homebrew.failed = true
   end
 
+  sig { params(error: T.any(String, Exception)).returns(T.noreturn) }
   def odie(error)
     onoe error
     exit 1
@@ -111,7 +110,6 @@ module Kernel
 
     # Try to show the most relevant location in message, i.e. (if applicable):
     # - Location in a formula.
-    # - Location outside of 'compat/'.
     # - Location of caller of deprecated method (if all else fails).
     backtrace = caller
 
@@ -162,33 +160,33 @@ module Kernel
     odeprecated(method, replacement, options)
   end
 
-  def pretty_installed(f)
+  def pretty_installed(formula)
     if !$stdout.tty?
-      f.to_s
+      formula.to_s
     elsif Homebrew::EnvConfig.no_emoji?
-      Formatter.success("#{Tty.bold}#{f} (installed)#{Tty.reset}")
+      Formatter.success("#{Tty.bold}#{formula} (installed)#{Tty.reset}")
     else
-      "#{Tty.bold}#{f} #{Formatter.success("✔")}#{Tty.reset}"
+      "#{Tty.bold}#{formula} #{Formatter.success("✔")}#{Tty.reset}"
     end
   end
 
-  def pretty_outdated(f)
+  def pretty_outdated(formula)
     if !$stdout.tty?
-      f.to_s
+      formula.to_s
     elsif Homebrew::EnvConfig.no_emoji?
-      Formatter.error("#{Tty.bold}#{f} (outdated)#{Tty.reset}")
+      Formatter.error("#{Tty.bold}#{formula} (outdated)#{Tty.reset}")
     else
-      "#{Tty.bold}#{f} #{Formatter.warning("⚠")}#{Tty.reset}"
+      "#{Tty.bold}#{formula} #{Formatter.warning("⚠")}#{Tty.reset}"
     end
   end
 
-  def pretty_uninstalled(f)
+  def pretty_uninstalled(formula)
     if !$stdout.tty?
-      f.to_s
+      formula.to_s
     elsif Homebrew::EnvConfig.no_emoji?
-      Formatter.error("#{Tty.bold}#{f} (uninstalled)#{Tty.reset}")
+      Formatter.error("#{Tty.bold}#{formula} (uninstalled)#{Tty.reset}")
     else
-      "#{Tty.bold}#{f} #{Formatter.error("✘")}#{Tty.reset}"
+      "#{Tty.bold}#{formula} #{Formatter.error("✘")}#{Tty.reset}"
     end
   end
 
@@ -199,20 +197,20 @@ module Kernel
     if seconds > 59
       minutes = seconds / 60
       seconds %= 60
-      res = +"#{minutes} #{Utils.pluralize("minute", minutes)}"
+      res = +Utils.pluralize("minute", minutes, include_count: true)
       return res.freeze if seconds.zero?
 
       res << " "
     end
 
-    res << "#{seconds} #{Utils.pluralize("second", seconds)}"
+    res << Utils.pluralize("second", seconds, include_count: true)
     res.freeze
   end
 
-  def interactive_shell(f = nil)
-    unless f.nil?
-      ENV["HOMEBREW_DEBUG_PREFIX"] = f.prefix
-      ENV["HOMEBREW_DEBUG_INSTALL"] = f.full_name
+  def interactive_shell(formula = nil)
+    unless formula.nil?
+      ENV["HOMEBREW_DEBUG_PREFIX"] = formula.prefix
+      ENV["HOMEBREW_DEBUG_INSTALL"] = formula.full_name
     end
 
     if Utils::Shell.preferred == :zsh && (home = Dir.home).start_with?(HOMEBREW_TEMP.resolved_path.to_s)
@@ -350,16 +348,6 @@ module Kernel
     # rubocop:enable Style/GlobalVars
   end
 
-  sig { returns(String) }
-  def capture_stderr
-    old = $stderr
-    $stderr = StringIO.new
-    yield
-    $stderr.string
-  ensure
-    $stderr = old
-  end
-
   def redirect_stdout(file)
     out = $stdout.dup
     $stdout.reopen(file)
@@ -425,17 +413,6 @@ module Kernel
 
   def paths
     @paths ||= ORIGINAL_PATHS.uniq.map(&:to_s)
-  end
-
-  def parse_author!(author)
-    match_data = /^(?<name>[^<]+?)[ \t]*<(?<email>[^>]+?)>$/.match(author)
-    if match_data
-      name = match_data[:name]
-      email = match_data[:email]
-    end
-    raise UsageError, "Unable to parse name and email." if name.blank? && email.blank?
-
-    { name: name, email: email }
   end
 
   def disk_usage_readable(size_in_bytes)

@@ -14,6 +14,24 @@ module Homebrew
 
   module_function
 
+  # @api private
+  def gemfile
+    File.join(ENV.fetch("HOMEBREW_LIBRARY"), "Homebrew", "Gemfile")
+  end
+
+  # @api private
+  def valid_gem_groups
+    install_bundler!
+    require "bundler"
+
+    Bundler.with_unbundled_env do
+      ENV["BUNDLE_GEMFILE"] = gemfile
+      groups = Bundler::Definition.build(Bundler.default_gemfile, Bundler.default_lockfile, false).groups
+      groups.delete(:default)
+      groups.map(&:to_s)
+    end
+  end
+
   def ruby_bindir
     "#{RbConfig::CONFIG["prefix"]}/bin"
   end
@@ -116,13 +134,19 @@ module Homebrew
   end
 
   def install_bundler!
+    old_bundler_version = ENV.fetch("BUNDLER_VERSION", nil)
+
     setup_gem_environment!
+
+    ENV["BUNDLER_VERSION"] = HOMEBREW_BUNDLER_VERSION # Set so it correctly finds existing installs
     install_gem_setup_path!(
       "bundler",
       version:               HOMEBREW_BUNDLER_VERSION,
       executable:            "bundle",
       setup_gem_environment: false,
     )
+  ensure
+    ENV["BUNDLER_VERSION"] = old_bundler_version
   end
 
   def install_bundler_gems!(only_warn_on_failure: false, setup_path: true, groups: [])
@@ -134,6 +158,15 @@ module Homebrew
     old_bundle_frozen = ENV.fetch("BUNDLE_FROZEN", nil)
     old_sdkroot = ENV.fetch("SDKROOT", nil)
 
+    invalid_groups = groups - valid_gem_groups
+    raise ArgumentError, "Invalid gem groups: #{invalid_groups.join(", ")}" unless invalid_groups.empty?
+
+    # tests should not modify the state of the repo
+    if ENV["HOMEBREW_TESTS"]
+      setup_gem_environment!
+      return
+    end
+
     install_bundler!
 
     require "settings"
@@ -142,7 +175,7 @@ module Homebrew
     groups |= (Homebrew::Settings.read(:gemgroups)&.split(";") || [])
     groups.sort!
 
-    ENV["BUNDLE_GEMFILE"] = File.join(ENV.fetch("HOMEBREW_LIBRARY"), "Homebrew", "Gemfile")
+    ENV["BUNDLE_GEMFILE"] = gemfile
     ENV["BUNDLE_WITH"] = groups.join(" ")
     ENV["BUNDLE_FROZEN"] = "true"
 
@@ -173,8 +206,18 @@ module Homebrew
           end
           false
         end
-      else
+      elsif system bundle, "clean" # even if we have nothing to install, we may have removed gems
         true
+      else
+        message = <<~EOS
+          failed to run `#{bundle} clean`!
+        EOS
+        if only_warn_on_failure
+          opoo_if_defined message
+        else
+          odie_if_defined message
+        end
+        false
       end
 
       if bundle_installed

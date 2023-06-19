@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "formula"
@@ -7,8 +7,6 @@ require "utils/pypi"
 require "utils/tar"
 
 module Homebrew
-  extend T::Sig
-
   module_function
 
   sig { returns(CLI::Parser) }
@@ -121,9 +119,9 @@ module Homebrew
     # spamming during normal output.
     Homebrew.install_bundler_gems!
 
-    tap_remote_repo = formula.tap.remote_repo
+    tap_remote_repo = formula.tap.full_name || formula.tap.remote_repo
     remote = "origin"
-    remote_branch = formula.tap.path.git_origin_branch
+    remote_branch = formula.tap.git_repo.origin_branch_name
     previous_branch = "-"
 
     check_open_pull_requests(formula, tap_remote_repo, args: args)
@@ -327,7 +325,7 @@ module Homebrew
 
     unless args.dry_run?
       resources_checked = PyPI.update_python_resources! formula,
-                                                        version:                  new_formula_version,
+                                                        version:                  new_formula_version.to_s,
                                                         package_name:             args.python_package_name,
                                                         extra_packages:           args.python_extra_packages,
                                                         exclude_packages:         args.python_exclude_packages,
@@ -342,7 +340,7 @@ module Homebrew
       pr_message += <<~EOS
 
 
-        `resource` blocks may require updates.
+        - [ ] `resource` blocks have been checked for updates.
       EOS
     end
 
@@ -362,7 +360,7 @@ module Homebrew
         pr_message += <<~XML
           <details>
             <summary>#{pre}release notes</summary>
-            #{github_release_data["body"]}
+            <pre>#{github_release_data["body"]}</pre>
           </details>
         XML
       end
@@ -415,7 +413,7 @@ module Homebrew
     resource.url(url, specs)
     resource.owner = Resource.new(formula.name)
     forced_version = new_version && new_version != resource.version.to_s
-    resource.version = new_version if forced_version
+    resource.version(new_version) if forced_version
     odie "Couldn't identify version, specify it using `--version=`." if resource.version.blank?
     [resource.fetch, forced_version]
   end

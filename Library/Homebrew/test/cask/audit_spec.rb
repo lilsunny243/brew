@@ -1,4 +1,3 @@
-# typed: false
 # frozen_string_literal: true
 
 require "cask/audit"
@@ -13,23 +12,14 @@ describe Cask::Audit, :cask do
   end
 
   def passed?(audit)
-    !audit.errors? && !audit.warnings?
+    !audit.errors?
   end
 
   def outcome(audit)
     if passed?(audit)
       "passed"
     else
-      message = ""
-
-      message += "warned with #{audit.warnings.map { |e| e.fetch(:message).inspect }.join(",")}" if audit.warnings?
-
-      if audit.errors?
-        message += " and " if audit.warnings?
-        message += "errored with #{audit.errors.map { |e| e.fetch(:message).inspect }.join(",")}"
-      end
-
-      message
+      "errored with #{audit.errors.map { |e| e.fetch(:message).inspect }.join(",")}"
     end
   end
 
@@ -53,16 +43,6 @@ describe Cask::Audit, :cask do
     end
   end
 
-  matcher :warn_with do |message|
-    match do |audit|
-      include_msg?(audit.warnings, message)
-    end
-
-    failure_message do |audit|
-      "expected to warn with message #{message.inspect} but #{outcome(audit)}"
-    end
-  end
-
   let(:cask) { instance_double(Cask::Cask) }
   let(:new_cask) { nil }
   let(:online) { nil }
@@ -70,14 +50,16 @@ describe Cask::Audit, :cask do
   let(:except) { [] }
   let(:strict) { nil }
   let(:token_conflicts) { nil }
-  let(:audit) {
+  let(:signing) { nil }
+  let(:audit) do
     described_class.new(cask, online:          online,
                               strict:          strict,
                               new_cask:        new_cask,
                               token_conflicts: token_conflicts,
+                              signing:         signing,
                               only:            only,
                               except:          except)
-  }
+  end
 
   describe "#new" do
     context "when `new_cask` is specified" do
@@ -99,9 +81,13 @@ describe Cask::Audit, :cask do
     context "when `online` is specified" do
       let(:online) { true }
 
-      it "implies `appcast`" do
-        expect(audit.appcast?).to be true
+      it "implies `download`" do
+        expect(audit.download).to be_truthy
       end
+    end
+
+    context "when `signing` is specified" do
+      let(:signing) { true }
 
       it "implies `download`" do
         expect(audit.download).to be_truthy
@@ -112,6 +98,14 @@ describe Cask::Audit, :cask do
   describe "#result" do
     subject { audit.result }
 
+    context "when there are no errors and `--strict` is not passed so we should not show anything" do
+      before do
+        audit.add_error("eh", strict_only: true)
+      end
+
+      it { is_expected.not_to match(/failed/) }
+    end
+
     context "when there are errors" do
       before do
         audit.add_error "bad"
@@ -120,25 +114,42 @@ describe Cask::Audit, :cask do
       it { is_expected.to match(/failed/) }
     end
 
-    context "when there are warnings" do
-      before do
-        audit.add_warning "eh"
-      end
-
-      it { is_expected.to match(/warning/) }
-    end
-
     context "when there are errors and warnings" do
       before do
         audit.add_error "bad"
-        audit.add_warning "eh"
+        audit.add_error("eh", strict_only: true)
       end
 
       it { is_expected.to match(/failed/) }
     end
 
-    context "when there are no errors or warnings" do
-      it { is_expected.to match(/passed/) }
+    context "when there are errors and warnings and `--strict` is passed" do
+      let(:strict) { true }
+
+      before do
+        audit.add_error "very bad"
+        audit.add_error("a little bit bad", strict_only: true)
+      end
+
+      it { is_expected.to match(/failed/) }
+    end
+
+    context "when there are warnings and `--strict` is not passed" do
+      before do
+        audit.add_error("a little bit bad", strict_only: true)
+      end
+
+      it { is_expected.not_to match(/failed/) }
+    end
+
+    context "when there are warnings and `--strict` is passed" do
+      let(:strict) { true }
+
+      before do
+        audit.add_error("a little bit bad", strict_only: true)
+      end
+
+      it { is_expected.to match(/failed/) }
     end
   end
 
@@ -471,7 +482,7 @@ describe Cask::Audit, :cask do
             cask 'signing-cask-test' do
               version '1.0'
               url "https://brew.sh/index.html"
-              binary 'Audit.app'
+              artifact "example.pdf", target: "/Library/Application Support/example"
             end
           RUBY
         end
@@ -479,7 +490,7 @@ describe Cask::Audit, :cask do
         it "does not fail" do
           expect(download_double).not_to receive(:fetch)
           expect(UnpackStrategy).not_to receive(:detect)
-          expect(run).not_to warn_with(/Audit\.app/)
+          expect(run).not_to error_with(/Audit\.app/)
         end
       end
 
@@ -497,7 +508,7 @@ describe Cask::Audit, :cask do
         it "does not fail since no extract" do
           allow(download_double).to receive(:fetch).and_return(Pathname.new("/tmp/test.zip"))
           allow(UnpackStrategy).to receive(:detect).and_return(nil)
-          expect(run).not_to warn_with(/Audit\.app/)
+          expect(run).not_to error_with(/Audit\.app/)
         end
       end
     end
@@ -761,7 +772,7 @@ describe Cask::Audit, :cask do
       end
 
       context "when the download is hosted on SourceForge and has a livecheck" do
-        let(:cask_token) { "sourceforge-with-appcast" }
+        let(:cask_token) { "sourceforge-with-livecheck" }
 
         it { is_expected.not_to error_with(message) }
       end
@@ -774,48 +785,57 @@ describe Cask::Audit, :cask do
       end
 
       context "when the download is hosted on DevMate and has a livecheck" do
-        let(:cask_token) { "devmate-with-appcast" }
+        let(:cask_token) { "devmate-with-livecheck" }
 
         it { is_expected.not_to error_with(message) }
       end
 
       context "when the download is hosted on DevMate and does not have a livecheck" do
-        let(:cask_token) { "devmate-without-appcast" }
+        let(:cask_token) { "devmate-without-livecheck" }
 
         it { is_expected.to error_with(message) }
       end
 
       context "when the download is hosted on HockeyApp and has a livecheck" do
-        let(:cask_token) { "hockeyapp-with-appcast" }
+        let(:cask_token) { "hockeyapp-with-livecheck" }
 
         it { is_expected.not_to error_with(message) }
       end
 
       context "when the download is hosted on HockeyApp and does not have a livecheck" do
-        let(:cask_token) { "hockeyapp-without-appcast" }
+        let(:cask_token) { "hockeyapp-without-livecheck" }
 
         it { is_expected.to error_with(message) }
       end
     end
 
-    describe "latest with appcast checks" do
-      let(:only) { ["latest_with_appcast_or_livecheck"] }
-      let(:message) { "Casks with an `appcast` should not use `version :latest`." }
+    describe "latest with livecheck checks" do
+      let(:only) { ["latest_with_livecheck"] }
+      let(:message) { "Casks with a `livecheck` should not use `version :latest`." }
 
-      context "when the Cask is :latest and does not have an appcast" do
+      context "when the Cask is :latest and does not have a livecheck" do
         let(:cask_token) { "version-latest" }
 
         it { is_expected.not_to error_with(message) }
       end
 
-      context "when the Cask is versioned and has an appcast" do
-        let(:cask_token) { "with-appcast" }
+      context "when the Cask is versioned and has a livecheck with skip information" do
+        let(:cask_token) { "latest-with-livecheck-skip" }
 
-        it { is_expected.not_to error_with(message) }
+        it { is_expected.to pass }
       end
 
-      context "when the Cask is :latest and has an appcast" do
-        let(:cask_token) { "latest-with-appcast" }
+      context "when the Cask is versioned and has a livecheck" do
+        let(:cask_token) { "latest-with-livecheck" }
+
+        it { is_expected.to error_with(message) }
+      end
+    end
+
+    describe "appcast" do
+      context "when the Cask has an appcast" do
+        let(:cask_token) { "with-appcast" }
+        let(:message) { "`appcast` should be replaced with a `livecheck`." }
 
         it { is_expected.to error_with(message) }
       end
@@ -969,9 +989,20 @@ describe Cask::Audit, :cask do
       context "when cask token conflicts with a core formula" do
         let(:formula_names) { %w[with-binary other-formula] }
 
-        it "warns about duplicates" do
-          expect(audit).to receive(:core_formula_names).and_return(formula_names)
-          expect(run).to warn_with(/possible duplicate/)
+        context "when `--strict` is passed" do
+          let(:strict) { true }
+
+          it "warns about duplicates" do
+            expect(audit).to receive(:core_formula_names).and_return(formula_names)
+            expect(run).to error_with(/possible duplicate/)
+          end
+        end
+
+        context "when `--strict` is not passed" do
+          it "does not warn about duplicates" do
+            expect(audit).to receive(:core_formula_names).and_return(formula_names)
+            expect(run).not_to error_with(/possible duplicate/)
+          end
         end
       end
 
@@ -1043,8 +1074,8 @@ describe Cask::Audit, :cask do
       context "when `new_cask` is false" do
         let(:new_cask) { false }
 
-        it "warns" do
-          expect(run).to warn_with(/should have a description/)
+        it "does not warn" do
+          expect(run).not_to error_with(/should have a description/)
         end
       end
 

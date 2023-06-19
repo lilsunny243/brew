@@ -1,4 +1,3 @@
-# typed: false
 # frozen_string_literal: true
 
 require "rubocops/bottle"
@@ -74,10 +73,10 @@ describe RuboCop::Cop::FormulaAudit::BottleTagIndentation do
         bottle do
           rebuild 4
           sha256 cellar: :any, arm64_big_sur: "aaaaaaaa"
-                               ^^^^^^^^^^^^^^^^^^^^^^^^^ Align bottle tags
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^ FormulaAudit/BottleTagIndentation: Align bottle tags
           sha256 cellar: "/usr/local/Cellar", big_sur: "faceb00c"
           sha256 catalina: "deadbeef"
-                 ^^^^^^^^^^^^^^^^^^^^ Align bottle tags
+                 ^^^^^^^^^^^^^^^^^^^^ FormulaAudit/BottleTagIndentation: Align bottle tags
         end
       end
     RUBY

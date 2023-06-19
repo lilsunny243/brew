@@ -118,7 +118,6 @@ Having a common order for stanzas makes casks easier to update and parse. Below 
     language
 
     url
-    appcast
     name
     desc
     homepage
@@ -141,6 +140,7 @@ Having a common order for stanzas makes casks easier to update and parse. Below 
     font
     input_method
     internet_plugin
+    keyboard_layout
     prefpane
     qlplugin
     mdimporter
@@ -190,25 +190,26 @@ Each cask must declare one or more *artifacts* (i.e. something to install).
 | name                             | multiple occurrences allowed? | value |
 | -------------------------------- | :---------------------------: | ----- |
 | [`app`](#stanza-app)             | yes                           | Relative path to an `.app` that should be moved into the `/Applications` folder on installation.
+| [`suite`](#stanza-suite)         | yes                           | Relative path to a containing directory that should be moved into the `/Applications` folder on installation.
 | [`pkg`](#stanza-pkg)             | yes                           | Relative path to a `.pkg` file containing the distribution.
+| [`installer`](#stanza-installer) | yes                           | Describes an executable which must be run to complete the installation.
 | [`binary`](#stanza-binary)       | yes                           | Relative path to a Binary that should be linked into the `$(brew --prefix)/bin` folder on installation.
+| `manpage`                        | yes                           | Relative path to a Man Page that should be linked into the respective man page folder on installation, e.g. `/usr/local/share/man/man3` for `my_app.3`.
 | `colorpicker`                    | yes                           | Relative path to a ColorPicker plugin that should be moved into the `~/Library/ColorPickers` folder on installation.
 | `dictionary`                     | yes                           | Relative path to a Dictionary that should be moved into the `~/Library/Dictionaries` folder on installation.
 | `font`                           | yes                           | Relative path to a Font that should be moved into the `~/Library/Fonts` folder on installation.
-| `input_method`                   | yes                           | Relative path to a Input Method that should be moved into the `~/Library/Input Methods` folder on installation.
-| `internet_plugin`                | yes                           | Relative path to a Service that should be moved into the `~/Library/Internet Plug-Ins` folder on installation.
-| `manpage`                        | yes                           | Relative path to a Man Page that should be linked into the respective man page folder on installation, e.g. `/usr/local/share/man/man3` for `my_app.3`.
+| `input_method`                   | yes                           | Relative path to an Input Method that should be moved into the `~/Library/Input Methods` folder on installation.
+| `internet_plugin`                | yes                           | Relative path to an Internet Plugin that should be moved into the `~/Library/Internet Plug-Ins` folder on installation.
+| `keyboard_layout`                | yes                           | Relative path to a Keyboard Layout that should be moved into the `/Library/Keyboard Layouts` folder on installation.
 | `prefpane`                       | yes                           | Relative path to a Preference Pane that should be moved into the `~/Library/PreferencePanes` folder on installation.
 | `qlplugin`                       | yes                           | Relative path to a QuickLook Plugin that should be moved into the `~/Library/QuickLook` folder on installation.
-| `mdimporter`                     | yes                           | Relative path to a Spotlight metadata importer that should be moved into the `~/Library/Spotlight` folder on installation.
+| `mdimporter`                     | yes                           | Relative path to a Spotlight Metadata Importer that should be moved into the `~/Library/Spotlight` folder on installation.
 | `screen_saver`                   | yes                           | Relative path to a Screen Saver that should be moved into the `~/Library/Screen Savers` folder on installation.
 | `service`                        | yes                           | Relative path to a Service that should be moved into the `~/Library/Services` folder on installation.
-| `audio_unit_plugin`              | yes                           | Relative path to an Audio Unit plugin that should be moved into the `~/Library/Audio/Components` folder on installation.
+| `audio_unit_plugin`              | yes                           | Relative path to an Audio Unit Plugin that should be moved into the `~/Library/Audio/Components` folder on installation.
 | `vst_plugin`                     | yes                           | Relative path to a VST Plugin that should be moved into the `~/Library/Audio/VST` folder on installation.
 | `vst3_plugin`                    | yes                           | Relative path to a VST3 Plugin that should be moved into the `~/Library/Audio/VST3` folder on installation.
-| [`suite`](#stanza-suite)         | yes                           | Relative path to a containing directory that should be moved into the `/Applications` folder on installation.
 | `artifact`                       | yes                           | Relative path to an arbitrary path that should be moved on installation. Must provide an absolute path as a `target`. (Example: [free-gpgmail.rb](https://github.com/Homebrew/homebrew-cask/blob/8bc2da7270292f899b9819972cf2ee647b8c6a3e/Casks/free-gpgmail.rb#L39)) This is only for unusual cases; the `app` stanza is strongly preferred when moving `.app` bundles.
-| [`installer`](#stanza-installer) | yes                           | Describes an executable which must be run to complete the installation.
 | `stage_only`                     | no                            | `true`. Asserts that the cask contains no activatable artifacts.
 
 ### Optional Stanzas
@@ -217,11 +218,10 @@ Each cask must declare one or more *artifacts* (i.e. something to install).
 | ------------------------------------------ | :---------------------------: | ----- |
 | [`uninstall`](#stanza-uninstall)           | yes                           | Procedures to uninstall a cask. Optional unless the `pkg` stanza is used.
 | [`zap`](#stanza-zap)                       | yes                           | Additional procedures for a more complete uninstall, including user files and shared resources.
-| [`appcast`](#stanza-appcast)               | no                            | URL providing an appcast feed to find updates for this cask.
 | [`depends_on`](#stanza-depends_on)         | yes                           | List of dependencies and requirements for this cask.
 | [`conflicts_with`](#stanza-conflicts_with) | yes                           | List of conflicts with this cask (*not yet functional*).
 | [`caveats`](#stanza-caveats)               | yes                           | String or Ruby block providing the user with cask-specific information at install time.
-| [`livecheck`](#stanza-livecheck)           | no                            | Ruby block describing how to find updates for this cask.
+| [`livecheck`](#stanza-livecheck)           | no                            | Ruby block describing how to find updates for this cask. Supersedes `appcast`.
 | `preflight`                                | yes                           | Ruby block containing preflight install operations (needed only in very rare cases).
 | [`postflight`](#stanza-flight)             | yes                           | Ruby block containing postflight install operations.
 | `uninstall_preflight`                      | yes                           | Ruby block containing preflight uninstall operations (needed only in very rare cases).
@@ -265,47 +265,11 @@ artifact "sapmachine-jdk-#{version}.jdk", target: "/Library/Java/JavaVirtualMach
 
 #### *target* Works on Most Artifact Types
 
-The `target:` key works similarly for most cask artifacts, such as `app`, `binary`, `colorpicker`, `dictionary`, `font`, `input_method`, `prefpane`, `qlplugin`, `mdimporter`, `service`, `suite`, and `artifact`.
+The `target:` key works similarly for most cask artifacts, such as `app`, `binary`, `colorpicker`, `dictionary`, `font`, `input_method`, `internet_plugin`, `keyboard_layout`, `prefpane`, `qlplugin`, `mdimporter`, `screen_saver`, `service`, `suite`, `audio_unit_plugin`, `vst_plugin`, `vst3_plugin`, and `artifact`.
 
 #### *target* Should Only Be Used in Select Cases
 
 Don’t use `target:` for aesthetic reasons, like removing version numbers (`app "Slack #{version}.app", target: "Slack.app"`). Use it when it makes sense functionally and document your reason clearly in the cask, using one of the templates: [for clarity](https://github.com/Homebrew/homebrew-cask/blob/0661430a4b0143671459260e5c8affc2f8e50413/Casks/imagemin.rb#L10); [for consistency](https://github.com/Homebrew/homebrew-cask/blob/8be96e3658ff7ab66ca40723c3018fc5e35e3735/Casks/x-moto.rb#L16); [to prevent conflicts](https://github.com/Homebrew/homebrew-cask/blob/f34503e7b5f5d018a65f4c726e1c57e15b8111ae/Casks/telegram-desktop.rb#L20); [due to developer suggestion](https://github.com/Homebrew/homebrew-cask/blob/ff3e9c4a6623af44b8a071027e8dcf3f4edfc6d9/Casks/kivy.rb#L12).
-
-### Stanza: `appcast`
-
-The value of the `appcast` stanza is a string, holding the URL for an appcast which provides information on future updates.
-
-**Note:** The [`livecheck` stanza](#stanza-livecheck) is usually preferred, as it allows casks to be updated automatically.
-
-The main [homebrew/cask](https://github.com/Homebrew/homebrew-cask) repository only accepts submissions for stable versions of software (and [documented exceptions](https://docs.brew.sh/Acceptable-Casks#but-there-is-no-stable-version)), but it still gets pull requests for unstable versions. By checking the submitted `version` against the contents of an appcast, we can better detect these invalid cases.
-
-There are a few different ways the `appcast` can be determined:
-
-* If the app is distributed via GitHub releases, the `appcast` will be of the form `https://github.com/<user>/<project_name>/releases.atom`. Example: [electron.rb](https://github.com/Homebrew/homebrew-cask/blob/645dbb8228ec2f1f217ed1431e188687aac13ca5/Casks/electron.rb#L7)
-
-* If the app is distributed via GitLab releases, the `appcast` will be of the form `https://gitlab.com/<user>/<project_name>/-/tags?format=atom`. Example: [grafx.rb](https://github.com/Homebrew/homebrew-cask/blob/b22381902f9da870bb07d21b496558f283dad612/Casks/grafx.rb#L6)
-
-* The popular update framework [Sparkle](https://sparkle-project.org/) generally uses the `SUFeedURL` property in `Contents/Info.plist` inside `.app` bundles. Example: [fstream.rb](https://github.com/Homebrew/homebrew-cask/blob/519999d874792f3ad7cc0fffd0520a8fdf468880/Casks/fstream.rb#L6)
-
-* SourceForge projects follow the form `https://sourceforge.net/projects/<project_name>/rss`. A more specific page can be used as needed, pointing to a specific directory structure: `https://sourceforge.net/projects/<project_name>/rss?path=/path/here`. Example: [displaycal.rb](https://github.com/Homebrew/homebrew-cask/blob/347dc92405889488ea72c47f7d50b1afaf348909/Casks/displaycal.rb#L7)
-
-* An appcast can be any URL hosted by the app’s developer that changes every time a new release is out or that contains the version number of the current release (e.g. a download HTML page). Webpages that only change on new version releases are preferred, as are sites that do not contain previous version strings (i.e. avoid changelog pages if the download page contains the current version number but not older ones). Example: [securityspy.rb](https://github.com/Homebrew/homebrew-cask/blob/e3495e32b7fb3ed1929b6082a4e3eb6a94d9494f/Casks/securityspy.rb#L6)
-
-The [`find-appcast`](https://github.com/Homebrew/homebrew-cask/blob/HEAD/developer/bin/find-appcast) script is able to identify some of these, as well as `electron-builder` appcasts which are trickier to find by hand. Run it with:
-
-```bash
-"$(brew --repository homebrew/cask)/developer/bin/find-appcast" '/path/to/application.app'
-```
-
-#### `appcast` Parameters
-
-| key             | value       |
-| --------------- | ----------- |
-| `must_contain:` | Custom string for `brew audit --appcast <cask>` to check against. (Example: [icollections.rb](https://github.com/Homebrew/homebrew-cask/blob/705ed8ddc23a0e7719348dfb278046f031495938/Casks/icollections.rb#L6-L7))
-
-Sometimes a `version` doesn’t match a string on the webpage, in which case we tweak what to search for. For example, if `version` is `6.26.1440` and the appcast’s contents only show `6.24`, the check for “is `version` in the appcast feed” will fail. With `must_contain`, the check is told to “look for this string instead of `version`”. In the example, `must_contain: version.major_minor` is saying “look for `6.24`”, making the check succeed.
-
-If no `must_contain` is given, the check considers from the beginning of the `version` string until the first character that isn’t alphanumeric or a period. For example, if `version` is `6.26b-14,40`, the check will look for `6.26b`. This is so it covers most cases by default, while still allowing complex `version`s suitable for interpolation in the rest of the cask.
 
 ### Stanza: `binary`
 
@@ -386,8 +350,8 @@ The following methods may be called to generate standard warning messages:
 | `reboot`                           | Users should reboot to complete installation.
 | `files_in_usr_local`               | The cask installs files to `/usr/local`, which may confuse Homebrew.
 | `discontinued`                     | All software development has been officially discontinued upstream.
-| `kext`                             | Users may need to enable their kexts in *System Preferences → Security & Privacy → General*.
-| `unsigned_accessibility`           | Users will need to re-enable the app on each update in *System Preferences → Security & Privacy → Privacy* as it is unsigned.
+| `kext`                             | Users may need to enable their kexts in *System Settings → Privacy & Security* (or *System Preferences → Security & Privacy → General* in earlier macOS versions).
+| `unsigned_accessibility`           | Users will need to re-enable the app on each update in *System Settings → Privacy & Security* (or *System Preferences → Security & Privacy → Privacy* in earlier macOS versions) as it is unsigned.
 | `license "web_page"`               | Users may find the software's usage license at `web_page`.
 | `free_license "web_page"`          | Users may obtain an official license to use the software at `web_page`.
 
@@ -647,7 +611,7 @@ installer script: "#{staged_path}/install.sh"
 
 ### Stanza: `language`
 
-The `language` stanza can match [ISO 639-1](https://en.wikipedia.org/wiki/ISO_639-1) language codes, regional identifiers ([ISO 3166-1 Alpha 2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)) and script codes ([ISO 15924](https://en.wikipedia.org/wiki/ISO_15924)), or a combination thereof.
+The `language` stanza can match [ISO 639-1](https://en.wikipedia.org/wiki/ISO_639-1) language codes, script codes ([ISO 15924](https://en.wikipedia.org/wiki/ISO_15924)) and regional identifiers ([ISO 3166-1 Alpha 2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)), or a combination thereof.
 
 US English should always be used as the default language:
 
@@ -699,7 +663,7 @@ brew install firefox --language=it
 
 ### Stanza: `livecheck`
 
-The `livecheck` stanza is used to automatically fetch the latest version of a cask from changelogs, release notes, appcasts, etc. See also: [`brew livecheck` reference](Brew-Livecheck.md)
+The `livecheck` stanza is used to automatically fetch the latest version of a cask from changelogs, release notes, appcasts, etc. Since the main [homebrew/cask](https://github.com/Homebrew/homebrew-cask) repository only accepts submissions for stable versions of software (and [documented exceptions](https://docs.brew.sh/Acceptable-Casks#but-there-is-no-stable-version)), this allows for verifying that the submitted version is the latest, and alerting when a newer version is available using [`brew livecheck`](Brew-Livecheck.md).
 
 Every `livecheck` block must contain a `url`, which can be either a string or a symbol pointing to other URLs in the cask (`:url` or `:homepage`).
 
@@ -732,7 +696,7 @@ livecheck do
 end
 ```
 
-The `header_match` strategy will try to parse a version from the filename (in the `Content-Disposition` header) and the final URL (in the `Location` header). If that doesn't work, a `regex` can be specified, e.g.:
+The `:header_match` strategy will try to parse a version from the filename (in the `Content-Disposition` header) and the final URL (in the `Location` header). If that doesn't work, a `regex` can be specified, e.g.:
 
 ```ruby
 strategy :header_match
@@ -761,6 +725,21 @@ strategy :page_match do |page|
   "#{match[2]},#{match[1]}"
 end
 ```
+
+The `:sparkle` strategy takes a URL for an XML feed providing release information to an app that self-updates using the Sparkle framework. This URL can be found within the app bundle as the `SUFeedURL` property in `Contents/Info.plist` or by using the [`find-appcast`](https://github.com/Homebrew/homebrew-cask/blob/HEAD/developer/bin/find-appcast) script. Run it with:
+
+```bash
+"$(brew --repository homebrew/cask)/developer/bin/find-appcast" '/path/to/application.app'
+```
+
+Both the `sparkle:version` and `sparkle:shortVersionString` attributes are checked by default; if only one is needed, specify `&:version` or `&:short_version`:
+
+```ruby
+url "https://manytricks.com/butler/appcast/"
+strategy :sparkle, &:short_version
+```
+
+If no means are available online for checking which version is current, as a last resort the `:extract_plist` strategy will have `brew livecheck` download the artifact and retrieve its version string from `Contents/Info.plist`.
 
 ### Stanza: `name`
 
@@ -1116,7 +1095,7 @@ When the domains of `url` and `homepage` differ, the discrepancy should be docum
 
 This must be added so a user auditing the cask knows the URL was verified by the Homebrew Cask team as the one provided by the vendor, even though it may look unofficial. It is our responsibility as Homebrew Cask maintainers to verify both the `url` and `homepage` information when first added (or subsequently modified, apart from versioning).
 
-The parameter doesn’t mean you should trust the source blindly, but we only approve casks in which users can easily verify its authenticity with basic means, such as checking the official homepage or public repository. Occasionally, slightly more elaborate techniques may be used, such as inspecting an [`appcast`](#stanza-appcast) we established as official. Cases where such quick verifications aren’t possible (e.g. when the download URL is behind a registration wall) are [treated in a stricter manner](https://docs.brew.sh/Acceptable-Casks#unofficial-vendorless-and-walled-builds).
+The parameter doesn’t mean you should trust the source blindly, but we only approve casks in which users can easily verify its authenticity with basic means, such as checking the official homepage or public repository. Occasionally, slightly more elaborate techniques may be used, such as inspecting a [`livecheck`](#stanza-livecheck) URL we established as official. Cases where such quick verifications aren’t possible (e.g. when the download URL is behind a registration wall) are [treated in a stricter manner](https://docs.brew.sh/Acceptable-Casks#unofficial-vendorless-and-walled-builds).
 
 #### Difficulty Finding a URL
 
@@ -1440,7 +1419,6 @@ Cask taps have naming conventions specific to each tap.
 
 * [Homebrew/cask-versions](https://github.com/Homebrew/homebrew-cask-versions/blob/HEAD/CONTRIBUTING.md#naming-versions-casks)
 * [Homebrew/cask-fonts](https://github.com/Homebrew/homebrew-cask-fonts/blob/HEAD/CONTRIBUTING.md#naming-font-casks)
-* [Homebrew/cask-drivers](https://github.com/Homebrew/homebrew-cask-drivers/blob/HEAD/CONTRIBUTING.md#naming-driver-casks)
 
 ### Special Affixes
 

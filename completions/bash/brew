@@ -125,6 +125,7 @@ _brew___cache() {
     -*)
       __brewcomp "
       --HEAD
+      --arch
       --bottle-tag
       --build-from-source
       --cask
@@ -132,6 +133,7 @@ _brew___cache() {
       --force-bottle
       --formula
       --help
+      --os
       --quiet
       --verbose
       "
@@ -346,12 +348,10 @@ _brew_audit() {
   case "${cur}" in
     -*)
       __brewcomp "
-      --appcast
+      --arch
       --audit-debug
       --cask
       --debug
-      --display-cop-names
-      --display-failures-only
       --display-filename
       --eval-all
       --except
@@ -362,11 +362,11 @@ _brew_audit() {
       --help
       --installed
       --new
-      --no-appcast
       --no-signing
       --online
       --only
       --only-cops
+      --os
       --quiet
       --signing
       --skip-style
@@ -751,6 +751,7 @@ _brew_deps() {
       --include-requirements
       --include-test
       --installed
+      --missing
       --quiet
       --skip-recommended
       --topological
@@ -788,6 +789,24 @@ _brew_desc() {
   esac
   __brew_complete_formulae
   __brew_complete_casks
+}
+
+_brew_determine_test_runners() {
+  local cur="${COMP_WORDS[COMP_CWORD]}"
+  case "${cur}" in
+    -*)
+      __brewcomp "
+      --debug
+      --dependents
+      --eval-all
+      --help
+      --quiet
+      --verbose
+      "
+      return
+      ;;
+    *) ;;
+  esac
 }
 
 _brew_developer() {
@@ -953,6 +972,7 @@ _brew_fetch() {
     -*)
       __brewcomp "
       --HEAD
+      --arch
       --bottle-tag
       --build-bottle
       --build-from-source
@@ -964,6 +984,7 @@ _brew_fetch() {
       --formula
       --help
       --no-quarantine
+      --os
       --quarantine
       --quiet
       --retry
@@ -1000,6 +1021,7 @@ _brew_generate_cask_api() {
     -*)
       __brewcomp "
       --debug
+      --dry-run
       --help
       --quiet
       --verbose
@@ -1016,6 +1038,7 @@ _brew_generate_formula_api() {
     -*)
       __brewcomp "
       --debug
+      --dry-run
       --help
       --quiet
       --verbose
@@ -1164,6 +1187,7 @@ _brew_instal() {
       --interactive
       --internet-plugindir
       --keep-tmp
+      --keyboard-layoutdir
       --language
       --mdimporterdir
       --no-binaries
@@ -1178,6 +1202,7 @@ _brew_instal() {
       --screen-saverdir
       --servicedir
       --skip-cask-deps
+      --skip-post-install
       --verbose
       --vst-plugindir
       --vst3-plugindir
@@ -1225,6 +1250,7 @@ _brew_install() {
       --interactive
       --internet-plugindir
       --keep-tmp
+      --keyboard-layoutdir
       --language
       --mdimporterdir
       --no-binaries
@@ -1239,6 +1265,7 @@ _brew_install() {
       --screen-saverdir
       --servicedir
       --skip-cask-deps
+      --skip-post-install
       --verbose
       --vst-plugindir
       --vst3-plugindir
@@ -1508,9 +1535,11 @@ _brew_migrate() {
   case "${cur}" in
     -*)
       __brewcomp "
+      --cask
       --debug
       --dry-run
       --force
+      --formula
       --help
       --quiet
       --verbose
@@ -1520,6 +1549,7 @@ _brew_migrate() {
     *) ;;
   esac
   __brew_complete_installed_formulae
+  __brew_complete_installed_casks
 }
 
 _brew_missing() {
@@ -1538,6 +1568,22 @@ _brew_missing() {
     *) ;;
   esac
   __brew_complete_formulae
+}
+
+_brew_nodenv_sync() {
+  local cur="${COMP_WORDS[COMP_CWORD]}"
+  case "${cur}" in
+    -*)
+      __brewcomp "
+      --debug
+      --help
+      --quiet
+      --verbose
+      "
+      return
+      ;;
+    *) ;;
+  esac
 }
 
 _brew_options() {
@@ -1603,6 +1649,22 @@ _brew_pin() {
   __brew_complete_installed_formulae
 }
 
+_brew_postgresql_upgrade_database() {
+  local cur="${COMP_WORDS[COMP_CWORD]}"
+  case "${cur}" in
+    -*)
+      __brewcomp "
+      --debug
+      --help
+      --quiet
+      --verbose
+      "
+      return
+      ;;
+    *) ;;
+  esac
+}
+
 _brew_postinstall() {
   local cur="${COMP_WORDS[COMP_CWORD]}"
   case "${cur}" in
@@ -1625,6 +1687,7 @@ _brew_pr_automerge() {
   case "${cur}" in
     -*)
       __brewcomp "
+      --autosquash
       --debug
       --help
       --ignore-failures
@@ -1649,9 +1712,11 @@ _brew_pr_publish() {
   case "${cur}" in
     -*)
       __brewcomp "
+      --autosquash
       --branch
       --debug
       --help
+      --large-runner
       --message
       --no-autosquash
       --quiet
@@ -1671,6 +1736,7 @@ _brew_pr_pull() {
     -*)
       __brewcomp "
       --artifact
+      --autosquash
       --branch-okay
       --clean
       --committer
@@ -1681,6 +1747,7 @@ _brew_pr_pull() {
       --keep-old
       --message
       --no-autosquash
+      --no-cherry-pick
       --no-commit
       --no-upload
       --quiet
@@ -1740,16 +1807,34 @@ _brew_prof() {
   __brew_complete_commands
 }
 
+_brew_rbenv_sync() {
+  local cur="${COMP_WORDS[COMP_CWORD]}"
+  case "${cur}" in
+    -*)
+      __brewcomp "
+      --debug
+      --help
+      --quiet
+      --verbose
+      "
+      return
+      ;;
+    *) ;;
+  esac
+}
+
 _brew_readall() {
   local cur="${COMP_WORDS[COMP_CWORD]}"
   case "${cur}" in
     -*)
       __brewcomp "
       --aliases
+      --arch
       --debug
       --eval-all
       --help
       --no-simulate
+      --os
       --quiet
       --syntax
       --verbose
@@ -1787,6 +1872,7 @@ _brew_reinstall() {
       --interactive
       --internet-plugindir
       --keep-tmp
+      --keyboard-layoutdir
       --language
       --mdimporterdir
       --no-binaries
@@ -1952,7 +2038,6 @@ _brew_style() {
       __brewcomp "
       --cask
       --debug
-      --display-cop-names
       --except-cops
       --fix
       --formula
@@ -2090,7 +2175,6 @@ _brew_tests() {
       --debug
       --generic
       --help
-      --no-compat
       --online
       --only
       --quiet
@@ -2445,6 +2529,7 @@ _brew_upgrade() {
       --interactive
       --internet-plugindir
       --keep-tmp
+      --keyboard-layoutdir
       --language
       --mdimporterdir
       --no-binaries
@@ -2483,6 +2568,7 @@ _brew_uses() {
       --include-optional
       --include-test
       --installed
+      --missing
       --quiet
       --recursive
       --skip-recommended
@@ -2572,6 +2658,7 @@ _brew() {
     create) _brew_create ;;
     deps) _brew_deps ;;
     desc) _brew_desc ;;
+    determine-test-runners) _brew_determine_test_runners ;;
     developer) _brew_developer ;;
     dispatch-build-bottle) _brew_dispatch_build_bottle ;;
     docs) _brew_docs ;;
@@ -2604,15 +2691,18 @@ _brew() {
     ls) _brew_ls ;;
     migrate) _brew_migrate ;;
     missing) _brew_missing ;;
+    nodenv-sync) _brew_nodenv_sync ;;
     options) _brew_options ;;
     outdated) _brew_outdated ;;
     pin) _brew_pin ;;
+    postgresql-upgrade-database) _brew_postgresql_upgrade_database ;;
     postinstall) _brew_postinstall ;;
     pr-automerge) _brew_pr_automerge ;;
     pr-publish) _brew_pr_publish ;;
     pr-pull) _brew_pr_pull ;;
     pr-upload) _brew_pr_upload ;;
     prof) _brew_prof ;;
+    rbenv-sync) _brew_rbenv_sync ;;
     readall) _brew_readall ;;
     reinstall) _brew_reinstall ;;
     release) _brew_release ;;

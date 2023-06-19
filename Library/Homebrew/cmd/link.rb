@@ -1,14 +1,11 @@
 # typed: true
 # frozen_string_literal: true
 
-require "ostruct"
 require "caveats"
 require "cli/parser"
 require "unlink"
 
 module Homebrew
-  extend T::Sig
-
   module_function
 
   sig { returns(CLI::Parser) }

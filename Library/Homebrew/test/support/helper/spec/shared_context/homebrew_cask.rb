@@ -1,4 +1,3 @@
-# typed: false
 # frozen_string_literal: true
 
 require "cask/config"
@@ -11,6 +10,7 @@ module Cask
   class Config
     DEFAULT_DIRS_PATHNAMES = {
       appdir:               Pathname(TEST_TMPDIR)/"cask-appdir",
+      keyboard_layoutdir:   Pathname(TEST_TMPDIR)/"cask-keyboard-layoutdir",
       prefpanedir:          Pathname(TEST_TMPDIR)/"cask-prefpanedir",
       qlplugindir:          Pathname(TEST_TMPDIR)/"cask-qlplugindir",
       mdimporterdir:        Pathname(TEST_TMPDIR)/"cask-mdimporter",

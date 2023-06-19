@@ -1,4 +1,3 @@
-# typed: false
 # frozen_string_literal: true
 
 require "cmd/update-report"
@@ -39,9 +38,9 @@ describe "brew update-report" do
     specify "without revision variable" do
       ENV.delete_if { |k, _v| k.start_with? "HOMEBREW_UPDATE" }
 
-      expect {
+      expect do
         described_class.new(tap)
-      }.to raise_error(Reporter::ReporterRevisionUnsetError)
+      end.to raise_error(Reporter::ReporterRevisionUnsetError)
     end
 
     specify "without any changes" do

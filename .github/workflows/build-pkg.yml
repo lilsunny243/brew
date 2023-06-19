@@ -10,7 +10,8 @@ on:
 
 jobs:
   build:
-    runs-on: macos-12
+    if: github.repository_owner == 'Homebrew'
+    runs-on: macos-13
     env:
       IDENTIFIER: sh.brew.Homebrew
       TMP_PATH: /tmp/brew
@@ -23,7 +24,7 @@ jobs:
       - name: Version name
         id: print-version
         run: |
-          echo "version=$(git -C brew describe --tags --always)" > $GITHUB_OUTPUT
+          echo "version=$(git -C brew describe --tags --always)" >> "$GITHUB_OUTPUT"
       - name: Build package
         run: |
          pkgbuild --root brew \

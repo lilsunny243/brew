@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 module Homebrew
@@ -10,7 +10,7 @@ module Homebrew
     #
     # @api private
     module Strategy
-      extend T::Sig
+      extend Utils::Curl
 
       module_function
 
@@ -54,14 +54,6 @@ module Homebrew
         # messages in output
         "--silent"
       ].freeze
-
-      # `curl` arguments used in `Strategy#page_headers` method.
-      PAGE_HEADERS_CURL_ARGS = ([
-        # We only need the response head (not the body)
-        "--head",
-        # Some servers may not allow a HEAD request, so we use GET
-        "--request", "GET"
-      ] + DEFAULT_CURL_ARGS).freeze
 
       # `curl` arguments used in `Strategy#page_content` method.
       PAGE_CONTENT_CURL_ARGS = ([
@@ -161,7 +153,7 @@ module Homebrew
             # specifies the strategy and contains a `strategy` block
             next if (livecheck_strategy != strategy_symbol) || !block_provided
           elsif strategy.const_defined?(:PRIORITY) &&
-                !strategy::PRIORITY.positive? &&
+                !strategy.const_get(:PRIORITY).positive? &&
                 livecheck_strategy != strategy_symbol
             # Ignore strategies with a priority of 0 or lower, unless the
             # strategy is specified in the `livecheck` block
@@ -174,7 +166,7 @@ module Homebrew
         # Sort usable strategies in descending order by priority, using the
         # DEFAULT_PRIORITY when a strategy doesn't contain a PRIORITY constant
         usable_strategies.sort_by do |strategy|
-          (strategy.const_defined?(:PRIORITY) ? -strategy::PRIORITY : -DEFAULT_PRIORITY)
+          (strategy.const_defined?(:PRIORITY) ? -strategy.const_get(:PRIORITY) : -DEFAULT_PRIORITY)
         end
       end
 
@@ -190,15 +182,20 @@ module Homebrew
         headers = []
 
         [:default, :browser].each do |user_agent|
-          output, _, status = curl_with_workarounds(
-            *PAGE_HEADERS_CURL_ARGS, url,
-            **DEFAULT_CURL_OPTIONS,
-            use_homebrew_curl: homebrew_curl,
-            user_agent:        user_agent
-          )
-          next unless status.success?
+          begin
+            parsed_output = curl_headers(
+              "--max-redirs",
+              MAX_REDIRECTIONS.to_s,
+              url,
+              wanted_headers:    ["location", "content-disposition"],
+              use_homebrew_curl: homebrew_curl,
+              user_agent:        user_agent,
+              **DEFAULT_CURL_OPTIONS,
+            )
+          rescue ErrorDuringExecution
+            next
+          end
 
-          parsed_output = parse_curl_output(output, max_iterations: MAX_PARSE_ITERATIONS)
           parsed_output[:responses].each { |response| headers << response[:headers] }
           break if headers.present?
         end
@@ -216,9 +213,9 @@ module Homebrew
       # @return [Hash]
       sig { params(url: String, homebrew_curl: T::Boolean).returns(T::Hash[Symbol, T.untyped]) }
       def self.page_content(url, homebrew_curl: false)
-        stderr = nil
+        stderr = T.let(nil, T.nilable(String))
         [:default, :browser].each do |user_agent|
-          stdout, stderr, status = curl_with_workarounds(
+          stdout, stderr, status = curl_output(
             *PAGE_CONTENT_CURL_ARGS, url,
             **DEFAULT_CURL_OPTIONS,
             use_homebrew_curl: homebrew_curl,
@@ -273,6 +270,7 @@ require_relative "strategy/electron_builder"
 require_relative "strategy/extract_plist"
 require_relative "strategy/git"
 require_relative "strategy/github_latest"
+require_relative "strategy/github_releases"
 require_relative "strategy/gnome"
 require_relative "strategy/gnu"
 require_relative "strategy/hackage"

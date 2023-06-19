@@ -9,8 +9,6 @@ require "zlib"
 #
 # @api private
 class GitHubPackages
-  extend T::Sig
-
   include Context
 
   URL_DOMAIN = "ghcr.io"
@@ -59,9 +57,20 @@ class GitHubPackages
     load_schemas!
 
     bottles_hash.each do |formula_full_name, bottle_hash|
+      # First, check that we won't encounter an error in the middle of uploading bottles.
+      preupload_check(user, token, skopeo, formula_full_name, bottle_hash,
+                      keep_old: keep_old, dry_run: dry_run, warn_on_error: warn_on_error)
+    end
+
+    # We intentionally iterate over `bottles_hash` twice to
+    # avoid erroring out in the middle of uploading bottles.
+    # rubocop:disable Style/CombinableLoops
+    bottles_hash.each do |formula_full_name, bottle_hash|
+      # Next, upload the bottles after checking them all.
       upload_bottle(user, token, skopeo, formula_full_name, bottle_hash,
                     keep_old: keep_old, dry_run: dry_run, warn_on_error: warn_on_error)
     end
+    # rubocop:enable Style/CombinableLoops
   end
 
   def self.version_rebuild(version, rebuild, bottle_tag = nil)
@@ -193,7 +202,7 @@ class GitHubPackages
     end
   end
 
-  def upload_bottle(user, token, skopeo, formula_full_name, bottle_hash, keep_old:, dry_run:, warn_on_error:)
+  def preupload_check(user, token, skopeo, _formula_full_name, bottle_hash, keep_old:, dry_run:, warn_on_error:)
     formula_name = bottle_hash["formula"]["name"]
 
     _, org, repo, = *bottle_hash["bottle"]["root_url"].match(URL_REGEX)
@@ -238,6 +247,16 @@ class GitHubPackages
         end
       end
     end
+
+    [formula_name, org, repo, version, rebuild, version_rebuild, image_name, image_uri, keep_old]
+  end
+
+  def upload_bottle(user, token, skopeo, formula_full_name, bottle_hash, keep_old:, dry_run:, warn_on_error:)
+    # We run the preupload check twice to prevent TOCTOU bugs.
+    result = preupload_check(user, token, skopeo, formula_full_name, bottle_hash,
+                             keep_old: keep_old, dry_run: dry_run, warn_on_error: warn_on_error)
+
+    formula_name, org, repo, version, rebuild, version_rebuild, image_name, image_uri, keep_old = *result
 
     root = Pathname("#{formula_name}--#{version_rebuild}")
     FileUtils.rm_rf root
@@ -356,11 +375,14 @@ class GitHubPackages
 
       documentation = "https://formulae.brew.sh/formula/#{formula_name}" if formula_core_tap
 
+      local_file_size = File.size(local_file)
+
       descriptor_annotations_hash = {
         "org.opencontainers.image.ref.name" => tag,
         "sh.brew.bottle.cpu.variant"        => cpu_variant,
         "sh.brew.bottle.digest"             => tar_gz_sha256,
         "sh.brew.bottle.glibc.version"      => glibc_version,
+        "sh.brew.bottle.size"               => local_file_size.to_s,
         "sh.brew.tab"                       => tab.to_json,
       }.reject { |_, v| v.blank? }
 
@@ -407,12 +429,21 @@ class GitHubPackages
                      "org.opencontainers.image.ref.name" => version_rebuild)
 
     puts
-    args = ["copy", "--retry-times=5", "--all", "oci:#{root}", image_uri.to_s]
+    args = ["copy", "--retry-times=3", "--all", "oci:#{root}", image_uri.to_s]
     if dry_run
       puts "#{skopeo} #{args.join(" ")} --dest-creds=#{user}:$HOMEBREW_GITHUB_PACKAGES_TOKEN"
     else
       args << "--dest-creds=#{user}:#{token}"
-      system_command!(skopeo, verbose: true, print_stdout: true, args: args)
+      retry_count = 0
+      begin
+        system_command!(skopeo, verbose: true, print_stdout: true, args: args)
+      rescue ErrorDuringExecution
+        retry_count += 1
+        odie "Cannot perform an upload to registry after retrying multiple times!" if retry_count >= 10
+        sleep 2 ** retry_count
+        retry
+      end
+
       package_name = "#{GitHubPackages.repo_without_prefix(repo)}/#{image_name}"
       ohai "Uploaded to https://github.com/orgs/#{org}/packages/container/package/#{package_name}"
     end
@@ -427,7 +458,7 @@ class GitHubPackages
   def write_tar_gz(local_file, blobs)
     tar_gz_sha256 = Digest::SHA256.file(local_file)
                                   .hexdigest
-    FileUtils.cp local_file, blobs/tar_gz_sha256
+    FileUtils.ln local_file, blobs/tar_gz_sha256
     tar_gz_sha256
   end
 

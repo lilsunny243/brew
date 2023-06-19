@@ -1,4 +1,3 @@
-# typed: false
 # frozen_string_literal: true
 
 require "formula"
@@ -16,7 +15,7 @@ describe Formulary do
 
         bottle do
           root_url "file://#{bottle_dir}"
-          sha256 cellar: :any_skip_relocation, #{Utils::Bottles.tag}: "8f9aecd233463da6a4ea55f5f88fc5841718c013f3e2a7941350d6130f1dc149"
+          sha256 cellar: :any_skip_relocation, #{Utils::Bottles.tag}: "d7b9f4e8bf83608b71fe958a99f19f2e5e68bb2582965d32e41759c24f1aef97"
         end
 
         def install
@@ -70,15 +69,15 @@ describe Formulary do
     end
 
     it "raises an error if the Formula cannot be found" do
-      expect {
+      expect do
         described_class.factory("not_existed_formula")
-      }.to raise_error(FormulaUnavailableError)
+      end.to raise_error(FormulaUnavailableError)
     end
 
     it "raises an error if ref is nil" do
-      expect {
+      expect do
         described_class.factory(nil)
-      }.to raise_error(ArgumentError)
+      end.to raise_error(ArgumentError)
     end
 
     context "with sharded Formula directory" do
@@ -106,9 +105,9 @@ describe Formulary do
       end
 
       it "raises an error" do
-        expect {
+        expect do
           described_class.factory(formula_name)
-        }.to raise_error(FormulaClassUnavailableError)
+        end.to raise_error(FormulaClassUnavailableError)
       end
     end
 
@@ -200,9 +199,9 @@ describe Formulary do
       end
 
       it "raises an error when the Formula cannot be found" do
-        expect {
+        expect do
           described_class.factory("#{tap}/not_existed_formula")
-        }.to raise_error(TapFormulaUnavailableError)
+        end.to raise_error(TapFormulaUnavailableError)
       end
 
       it "returns a Formula when given a fully qualified name" do
@@ -213,9 +212,9 @@ describe Formulary do
         (another_tap.path/"Formula").mkpath
         (another_tap.path/"Formula/#{formula_name}.rb").write formula_content
 
-        expect {
+        expect do
           described_class.factory(formula_name)
-        }.to raise_error(TapFormulaAmbiguityError)
+        end.to raise_error(TapFormulaAmbiguityError)
       end
     end
 
@@ -244,7 +243,7 @@ describe Formulary do
                   Utils::Bottles.tag.to_s => {
                     "cellar" => ":any",
                     "url"    => "file://#{bottle_dir}/#{formula_name}",
-                    "sha256" => "8f9aecd233463da6a4ea55f5f88fc5841718c013f3e2a7941350d6130f1dc149",
+                    "sha256" => "d7b9f4e8bf83608b71fe958a99f19f2e5e68bb2582965d32e41759c24f1aef97",
                   },
                 },
               },
@@ -271,7 +270,13 @@ describe Formulary do
             "conflicts_with"           => ["conflicting_formula"],
             "conflicts_with_reasons"   => ["it does"],
             "link_overwrite"           => ["bin/abc"],
-            "caveats"                  => "example caveat string",
+            "caveats"                  => "example caveat string\n/$HOME\n$HOMEBREW_PREFIX",
+            "service"                  => {
+              "name"        => { macos: "custom.launchd.name", linux: "custom.systemd.name" },
+              "run"         => ["$HOMEBREW_PREFIX/opt/formula_name/bin/beanstalkd", "test"],
+              "run_type"    => "immediate",
+              "working_dir" => "/$HOME",
+            },
           }.merge(extra_items),
         }
       end
@@ -352,11 +357,18 @@ describe Formulary do
         expect(formula.conflicts.map(&:reason)).to include "it does"
         expect(formula.class.link_overwrite_paths).to include "bin/abc"
 
-        expect(formula.caveats).to eq "example caveat string"
+        expect(formula.caveats).to eq "example caveat string\n#{Dir.home}\n#{HOMEBREW_PREFIX}"
 
-        expect {
+        expect(formula).to be_a_service
+        expect(formula.service.command).to eq(["#{HOMEBREW_PREFIX}/opt/formula_name/bin/beanstalkd", "test"])
+        expect(formula.service.run_type).to eq(:immediate)
+        expect(formula.service.working_dir).to eq(Dir.home)
+        expect(formula.plist_name).to eq("custom.launchd.name")
+        expect(formula.service_name).to eq("custom.systemd.name")
+
+        expect do
           formula.install
-        }.to raise_error("Cannot build from source from abstract formula.")
+        end.to raise_error("Cannot build from source from abstract formula.")
       end
 
       it "returns a deprecated Formula when given a name" do
@@ -365,9 +377,9 @@ describe Formulary do
         formula = described_class.factory(formula_name)
         expect(formula).to be_a(Formula)
         expect(formula.deprecated?).to be true
-        expect {
+        expect do
           formula.install
-        }.to raise_error("Cannot build from source from abstract formula.")
+        end.to raise_error("Cannot build from source from abstract formula.")
       end
 
       it "returns a disabled Formula when given a name" do
@@ -376,9 +388,9 @@ describe Formulary do
         formula = described_class.factory(formula_name)
         expect(formula).to be_a(Formula)
         expect(formula.disabled?).to be true
-        expect {
+        expect do
           formula.install
-        }.to raise_error("Cannot build from source from abstract formula.")
+        end.to raise_error("Cannot build from source from abstract formula.")
       end
 
       it "returns a Formula with variations when given a name", :needs_macos do
@@ -439,9 +451,9 @@ describe Formulary do
     end
 
     it "raises an error if the Formula is not available" do
-      expect {
+      expect do
         described_class.to_rack("a/b/#{formula_name}")
-      }.to raise_error(TapFormulaUnavailableError)
+      end.to raise_error(TapFormulaUnavailableError)
     end
   end
 

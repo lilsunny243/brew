@@ -9,10 +9,9 @@ require "formula"
 require "cli/parser"
 require "cask/caskroom"
 require "dependencies_helpers"
+require "ostruct"
 
 module Homebrew
-  extend T::Sig
-
   extend DependenciesHelpers
 
   sig { returns(CLI::Parser) }
@@ -28,6 +27,8 @@ module Homebrew
              description: "Resolve more than one level of dependencies."
       switch "--installed",
              description: "Only list formulae and casks that are currently installed."
+      switch "--missing",
+             description: "Only list formulae and casks that are not currently installed."
       switch "--eval-all",
              description: "Evaluate all available formulae and casks, whether installed or not, to show " \
                           "their dependents."
@@ -48,6 +49,7 @@ module Homebrew
 
       conflicts "--formula", "--cask"
       conflicts "--installed", "--all"
+      conflicts "--missing", "--installed"
 
       named_args :formula, min: 1
     end

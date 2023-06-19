@@ -24,8 +24,6 @@ module Homebrew
       #
       # @api public
       class Git
-        extend T::Sig
-
         # The priority of the strategy on an informal scale of 1 to 10 (from
         # lowest to highest).
         PRIORITY = 8
@@ -85,7 +83,7 @@ module Homebrew
           params(
             tags:  T::Array[String],
             regex: T.nilable(Regexp),
-            block: T.untyped,
+            block: T.nilable(Proc),
           ).returns(T::Array[String])
         }
         def self.versions_from_tags(tags, regex = nil, &block)
@@ -125,7 +123,7 @@ module Homebrew
             url:     String,
             regex:   T.nilable(Regexp),
             _unused: T.nilable(T::Hash[Symbol, T.untyped]),
-            block:   T.untyped,
+            block:   T.nilable(Proc),
           ).returns(T::Hash[Symbol, T.untyped])
         }
         def self.find_versions(url:, regex: nil, **_unused, &block)

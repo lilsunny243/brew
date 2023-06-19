@@ -5,8 +5,6 @@ require "cli/parser"
 require "livecheck/livecheck"
 
 module Homebrew
-  extend T::Sig
-
   module_function
 
   sig { returns(CLI::Parser) }
@@ -72,7 +70,7 @@ module Homebrew
 
       ambiguous_casks = []
       if !args.formula? && !args.cask?
-        ambiguous_casks = formulae_and_casks \
+        ambiguous_casks = formulae_and_casks
                           .group_by { |item| Livecheck.package_or_resource_name(item, full_name: true) }
                           .values
                           .select { |items| items.length > 1 }
@@ -244,7 +242,10 @@ module Homebrew
 
     new_version = if livecheck_latest.is_a?(Version) && livecheck_latest > current_version
       livecheck_latest
-    elsif repology_latest.is_a?(Version) && repology_latest > current_version && !formula_or_cask.livecheckable?
+    elsif repology_latest.is_a?(Version) &&
+          repology_latest > current_version &&
+          !formula_or_cask.livecheckable? &&
+          current_version != "latest"
       repology_latest
     end.presence
 

@@ -1,11 +1,10 @@
-# typed: false
 # frozen_string_literal: true
 
 require "formula"
 
 describe "patching" do
-  let(:formula_subclass) {
-    Class.new(Formula) {
+  let(:formula_subclass) do
+    Class.new(Formula) do
       # These are defined within an anonymous class to avoid polluting the global namespace.
       # rubocop:disable RSpec/LeakyConstantDeclaration,Lint/ConstantDefinitionInBlock
       TESTBALL_URL = "file://#{TEST_FIXTURE_DIR}/tarballs/testball-0.1.tbz"
@@ -21,8 +20,8 @@ describe "patching" do
 
       url TESTBALL_URL
       sha256 TESTBALL_SHA256
-    }
-  }
+    end
+  end
 
   def formula(name = "formula_name", path: Formulary.core_path(name), spec: :stable, alias_path: nil, &block)
     formula_subclass.class_eval(&block)
@@ -65,11 +64,11 @@ describe "patching" do
 
   matcher :miss_apply do
     match do |formula|
-      expect {
+      expect do
         formula.brew do
           formula.patch
         end
-      }.to raise_error(MissingApplyError)
+      end.to raise_error(MissingApplyError)
     end
   end
 
@@ -148,7 +147,7 @@ describe "patching" do
   end
 
   specify "single_patch_dsl_with_incorrect_strip" do
-    expect {
+    expect do
       f = formula do
         patch :p0 do
           url PATCH_URL_A
@@ -157,11 +156,11 @@ describe "patching" do
       end
 
       f.brew { |formula, _staging| formula.patch }
-    }.to raise_error(BuildError)
+    end.to raise_error(BuildError)
   end
 
   specify "single_patch_dsl_with_incorrect_strip_with_apply" do
-    expect {
+    expect do
       f = formula do
         patch :p0 do
           url TESTBALL_PATCHES_URL
@@ -171,7 +170,7 @@ describe "patching" do
       end
 
       f.brew { |formula, _staging| formula.patch }
-    }.to raise_error(BuildError)
+    end.to raise_error(BuildError)
   end
 
   specify "patch_p0_dsl" do
@@ -217,7 +216,7 @@ describe "patching" do
   end
 
   specify "single_patch_dsl_with_apply_enoent_fail" do
-    expect {
+    expect do
       f = formula do
         patch do
           url TESTBALL_PATCHES_URL
@@ -227,7 +226,7 @@ describe "patching" do
       end
 
       f.brew { |formula, _staging| formula.patch }
-    }.to raise_error(BuildError)
+    end.to raise_error(BuildError)
   end
 end
 

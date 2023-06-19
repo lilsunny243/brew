@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 require "utils/shell"
@@ -7,6 +7,16 @@ require "utils/shell"
 #
 # @api private
 module FormulaCellarChecks
+  extend T::Helpers
+
+  abstract!
+
+  sig { abstract.returns(Formula) }
+  def formula; end
+
+  sig { abstract.params(output: T.nilable(String)).void }
+  def problem_if_output(output); end
+
   def check_env_path(bin)
     # warn the user if stuff was installed outside of their PATH
     return unless bin.directory?
@@ -278,7 +288,7 @@ module FormulaCellarChecks
   def check_service_command(formula)
     return unless formula.prefix.directory?
     return unless formula.service?
-    return if formula.service.command.blank?
+    return unless formula.service.command?
 
     "Service command does not exist" unless File.exist?(formula.service.command.first)
   end
@@ -322,7 +332,7 @@ module FormulaCellarChecks
     mismatches = {}
     keg.binary_executable_or_library_files.each do |file|
       farch = file.arch
-      mismatches[file] = farch unless farch == Hardware::CPU.arch
+      mismatches[file] = farch if farch != Hardware::CPU.arch
     end
     return if mismatches.empty?
 
@@ -407,7 +417,7 @@ module FormulaCellarChecks
       end
     end
 
-    has_cpuid_instruction = false
+    has_cpuid_instruction = T.let(false, T::Boolean)
     Utils.popen_read(objdump, "--disassemble", file) do |io|
       until io.eof?
         instruction = io.readline.split("\t")[@instruction_column_index[objdump]]&.strip

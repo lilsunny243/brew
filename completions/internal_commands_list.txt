@@ -30,6 +30,7 @@ contributions
 create
 deps
 desc
+determine-test-runners
 developer
 dispatch-build-bottle
 docs
@@ -63,15 +64,18 @@ log
 ls
 migrate
 missing
+nodenv-sync
 options
 outdated
 pin
+postgresql-upgrade-database
 postinstall
 pr-automerge
 pr-publish
 pr-pull
 pr-upload
 prof
+rbenv-sync
 readall
 reinstall
 release

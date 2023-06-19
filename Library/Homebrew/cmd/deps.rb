@@ -2,14 +2,11 @@
 # frozen_string_literal: true
 
 require "formula"
-require "ostruct"
 require "cli/parser"
 require "cask/caskroom"
 require "dependencies_helpers"
 
 module Homebrew
-  extend T::Sig
-
   extend DependenciesHelpers
 
   sig { returns(CLI::Parser) }
@@ -52,6 +49,8 @@ module Homebrew
       switch "--installed",
              description: "List dependencies for formulae that are currently installed. If <formula> is " \
                           "specified, list only its dependencies that are currently installed."
+      switch "--missing",
+             description: "Show only missing dependencies."
       switch "--eval-all",
              description: "Evaluate all available formulae and casks, whether installed or not, to list " \
                           "their dependencies."
@@ -67,6 +66,7 @@ module Homebrew
              description: "Treat all named arguments as casks."
 
       conflicts "--tree", "--graph"
+      conflicts "--installed", "--missing"
       conflicts "--installed", "--eval-all"
       conflicts "--installed", "--all"
       conflicts "--formula", "--cask"
@@ -249,11 +249,11 @@ module Homebrew
     "digraph {\n#{dot_code}\n}"
   end
 
-  def self.graph_deps(f, dep_graph:, recursive:, args:)
-    return if dep_graph.key?(f)
+  def self.graph_deps(formula, dep_graph:, recursive:, args:)
+    return if dep_graph.key?(formula)
 
-    dependables = dependables(f, args: args)
-    dep_graph[f] = dependables
+    dependables = dependables(formula, args: args)
+    dep_graph[formula] = dependables
     return unless recursive
 
     dependables.each do |dep|
@@ -274,19 +274,19 @@ module Homebrew
     end
   end
 
-  def self.dependables(f, args:)
+  def self.dependables(formula, args:)
     includes, ignores = args_includes_ignores(args)
-    deps = @use_runtime_dependencies ? f.runtime_dependencies : f.deps
+    deps = @use_runtime_dependencies ? formula.runtime_dependencies : formula.deps
     deps = reject_ignores(deps, ignores, includes)
-    reqs = reject_ignores(f.requirements, ignores, includes) if args.include_requirements?
+    reqs = reject_ignores(formula.requirements, ignores, includes) if args.include_requirements?
     reqs ||= []
     reqs + deps
   end
 
-  def self.recursive_deps_tree(f, dep_stack:, prefix:, recursive:, args:)
-    dependables = dependables(f, args: args)
+  def self.recursive_deps_tree(formula, dep_stack:, prefix:, recursive:, args:)
+    dependables = dependables(formula, args: args)
     max = dependables.length - 1
-    dep_stack.push f.name
+    dep_stack.push formula.name
     dependables.each_with_index do |dep, i|
       tree_lines = if i == max
         "└──"

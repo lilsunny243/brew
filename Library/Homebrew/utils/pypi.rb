@@ -1,14 +1,10 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 # Helper functions for updating PyPI resources.
 #
 # @api private
 module PyPI
-  extend T::Sig
-
-  module_function
-
   PYTHONHOSTED_URL_PREFIX = "https://files.pythonhosted.org/packages/"
   private_constant :PYTHONHOSTED_URL_PREFIX
 
@@ -16,11 +12,7 @@ module PyPI
   #
   # @api private
   class Package
-    extend T::Sig
-
-    attr_accessor :name
-    attr_accessor :extras
-    attr_accessor :version
+    attr_accessor :name, :extras, :version
 
     sig { params(package_string: String, is_url: T::Boolean).void }
     def initialize(package_string, is_url: false)
@@ -32,18 +24,21 @@ module PyPI
         end
         raise ArgumentError, "Package should be a valid PyPI URL" if match.blank?
 
-        @name = match[1]
+        @name = PyPI.normalize_python_package(match[1])
         @version = match[2]
         return
       end
 
-      @name = package_string
-      @name, @version = @name.split("==") if @name.include? "=="
+      if package_string.include? "=="
+        @name, @version = package_string.split("==")
+      else
+        @name = package_string
+      end
 
-      return unless (match = @name.match(/^(.*?)\[(.+)\]$/))
+      return unless (match = T.must(@name).match(/^(.*?)\[(.+)\]$/))
 
       @name = match[1]
-      @extras = match[2].split ","
+      @extras = T.must(match[2]).split ","
     end
 
     # Get name, URL, SHA-256 checksum, and latest version for a given PyPI package.
@@ -70,7 +65,10 @@ module PyPI
       sdist = json["urls"].find { |url| url["packagetype"] == "sdist" }
       return json["info"]["name"] if sdist.nil?
 
-      @pypi_info = [json["info"]["name"], sdist["url"], sdist["digests"]["sha256"], json["info"]["version"]]
+      @pypi_info = [
+        PyPI.normalize_python_package(json["info"]["name"]), sdist["url"],
+        sdist["digests"]["sha256"], json["info"]["version"]
+      ]
     end
 
     sig { returns(T::Boolean) }
@@ -89,7 +87,7 @@ module PyPI
 
     sig { params(other: Package).returns(T::Boolean) }
     def same_package?(other)
-      @name.tr("_", "-").casecmp(other.name.tr("_", "-")).zero?
+      T.must(@name.tr("_", "-").casecmp(other.name.tr("_", "-"))).zero?
     end
 
     # Compare only names so we can use .include? and .uniq on a Package array
@@ -111,7 +109,7 @@ module PyPI
   end
 
   sig { params(url: String, version: T.any(String, Version)).returns(T.nilable(String)) }
-  def update_pypi_url(url, version)
+  def self.update_pypi_url(url, version)
     package = Package.new url, is_url: true
 
     return unless package.valid_pypi_package?
@@ -135,8 +133,9 @@ module PyPI
       ignore_non_pypi_packages: T.nilable(T::Boolean),
     ).returns(T.nilable(T::Boolean))
   }
-  def update_python_resources!(formula, version: nil, package_name: nil, extra_packages: nil, exclude_packages: nil,
-                               print_only: false, silent: false, ignore_non_pypi_packages: false)
+  def self.update_python_resources!(formula, version: nil, package_name: nil, extra_packages: nil,
+                                    exclude_packages: nil, print_only: false, silent: false,
+                                    ignore_non_pypi_packages: false)
 
     auto_update_list = formula.tap&.pypi_formula_mappings
     if auto_update_list.present? && auto_update_list.key?(formula.full_name) &&
@@ -212,12 +211,13 @@ module PyPI
       end
     end
 
-    ensure_formula_installed!("pipgrip")
+    ensure_formula_installed!("python")
 
     ohai "Retrieving PyPI dependencies for \"#{input_packages.join(" ")}\"..." if !print_only && !silent
     command =
-      [Formula["pipgrip"].opt_bin/"pipgrip", "--json", "--tree", "--no-cache-dir", *input_packages.map(&:to_s)]
-    pipgrip_output = Utils.popen_read(*command)
+      [Formula["python"].bin/"python3", "-m", "pip", "install", "-q", "--dry-run", "--ignore-installed", "--report",
+       "/dev/stdout", *input_packages.map(&:to_s)]
+    pip_output = Utils.popen_read({ "PIP_REQUIRE_VIRTUALENV" => "false" }, *command)
     unless $CHILD_STATUS.success?
       odie <<~EOS
         Unable to determine dependencies for "#{input_packages.join(" ")}" because of a failure when running
@@ -226,7 +226,7 @@ module PyPI
       EOS
     end
 
-    found_packages = json_to_packages(JSON.parse(pipgrip_output), main_package, exclude_packages).uniq
+    found_packages = pip_report_to_packages(JSON.parse(pip_output), exclude_packages).uniq
 
     new_resource_blocks = ""
     found_packages.sort.each do |package|
@@ -284,17 +284,22 @@ module PyPI
     true
   end
 
-  def json_to_packages(json_tree, main_package, exclude_packages)
-    return [] if json_tree.blank?
+  def self.normalize_python_package(name)
+    # This normalization is defined in the PyPA packaging specifications;
+    # https://packaging.python.org/en/latest/specifications/name-normalization/#name-normalization
+    name.gsub(/[-_.]+/, "-").downcase
+  end
 
-    json_tree.flat_map do |package_json|
-      package = Package.new("#{package_json["name"]}==#{package_json["version"]}")
-      dependencies = if package == main_package || exclude_packages.exclude?(package)
-        json_to_packages(package_json["dependencies"], main_package, exclude_packages)
-      else
-        []
-      end
-      [package] + dependencies
-    end
+  def self.pip_report_to_packages(report, exclude_packages)
+    return [] if report.blank?
+
+    report["install"].map do |package|
+      name = normalize_python_package(package["metadata"]["name"])
+      version = package["metadata"]["version"]
+
+      package = Package.new "#{name}==#{version}"
+
+      package if exclude_packages.exclude? package
+    end.compact
   end
 end

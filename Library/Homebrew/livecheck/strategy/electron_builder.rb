@@ -12,8 +12,6 @@ module Homebrew
       #
       # @api private
       class ElectronBuilder
-        extend T::Sig
-
         NICE_NAME = "electron-builder"
 
         # A priority of zero causes livecheck to skip the strategy. We do this
@@ -45,7 +43,7 @@ module Homebrew
             regex:            T.nilable(Regexp),
             provided_content: T.nilable(String),
             unused:           T.nilable(T::Hash[Symbol, T.untyped]),
-            block:            T.untyped,
+            block:            T.nilable(Proc),
           ).returns(T::Hash[Symbol, T.untyped])
         }
         def self.find_versions(url:, regex: nil, provided_content: nil, **unused, &block)
@@ -54,7 +52,7 @@ module Homebrew
                   "#{Utils.demodulize(T.must(name))} only supports a regex when using a `strategy` block"
           end
 
-          T.unsafe(Yaml).find_versions(
+          Yaml.find_versions(
             url:              url,
             regex:            regex,
             provided_content: provided_content,

@@ -25,6 +25,10 @@ curl() {
   if [[ -z "${CURL_EXECUTABLE}" ]]
   then
     CURL_EXECUTABLE="$("${HOMEBREW_LIBRARY}/Homebrew/shims/shared/curl" --homebrew=print-path)"
+    if [[ -z "${CURL_EXECUTABLE}" ]]
+    then
+      odie "Can't find a working Curl!"
+    fi
   fi
   "${CURL_EXECUTABLE}" "$@"
 }
@@ -33,6 +37,10 @@ git() {
   if [[ -z "${GIT_EXECUTABLE}" ]]
   then
     GIT_EXECUTABLE="$("${HOMEBREW_LIBRARY}/Homebrew/shims/shared/git" --homebrew=print-path)"
+    if [[ -z "${GIT_EXECUTABLE}" ]]
+    then
+      odie "Can't find a working Git!"
+    fi
   fi
   "${GIT_EXECUTABLE}" "$@"
 }
@@ -803,7 +811,12 @@ EOS
         CURRENT_JSON_BYTESIZE="$(wc -c "${HOMEBREW_CACHE}"/api/"${formula_or_cask}".jws.json)"
         if [[ "${INITIAL_JSON_BYTESIZE}" != "${CURRENT_JSON_BYTESIZE}" ]]
         then
-          rm -f "${HOMEBREW_CACHE}/api/${formula_or_cask}_names.txt"
+          if [[ -f "${HOMEBREW_CACHE}/api/${formula_or_cask}_names.txt" ]]
+          then
+            mv -f "${HOMEBREW_CACHE}/api/${formula_or_cask}_names.txt" \
+              "${HOMEBREW_CACHE}/api/${formula_or_cask}_names.before.txt"
+          fi
+
           if [[ "${formula_or_cask}" == "formula" ]]
           then
             rm -f "${HOMEBREW_CACHE}/api/formula_aliases.txt"

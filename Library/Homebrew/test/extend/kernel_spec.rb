@@ -1,4 +1,3 @@
-# typed: false
 # frozen_string_literal: true
 
 describe "globally-scoped helper methods" do
@@ -10,9 +9,9 @@ describe "globally-scoped helper methods" do
 
   describe "#ofail" do
     it "sets Homebrew.failed to true" do
-      expect {
+      expect do
         ofail "foo"
-      }.to output("Error: foo\n").to_stderr
+      end.to output("Error: foo\n").to_stderr
 
       expect(Homebrew).to have_failed
     end
@@ -20,10 +19,9 @@ describe "globally-scoped helper methods" do
 
   describe "#odie" do
     it "exits with 1" do
-      expect(self).to receive(:exit).and_return(1)
-      expect {
+      expect do
         odie "foo"
-      }.to output("Error: foo\n").to_stderr
+      end.to output("Error: foo\n").to_stderr.and raise_error SystemExit
     end
   end
 
@@ -147,16 +145,16 @@ describe "globally-scoped helper methods" do
   end
 
   describe "#which_all" do
-    let(:cmd1) { dir/"foo" }
-    let(:cmd2) { dir/"bar/foo" }
-    let(:cmd3) { dir/"bar/baz/foo" }
+    let(:cmd_foo) { dir/"foo" }
+    let(:cmd_foo_bar) { dir/"bar/foo" }
+    let(:cmd_bar_baz_foo) { dir/"bar/baz/foo" }
 
     before do
       (dir/"bar/baz").mkpath
 
-      FileUtils.touch cmd2
+      FileUtils.touch cmd_foo_bar
 
-      [cmd1, cmd3].each do |cmd|
+      [cmd_foo, cmd_bar_baz_foo].each do |cmd|
         FileUtils.touch cmd
         cmd.chmod 0744
       end
@@ -168,7 +166,7 @@ describe "globally-scoped helper methods" do
         "#{dir}/baz:#{dir}",
         "~baduserpath",
       ].join(File::PATH_SEPARATOR)
-      expect(which_all("foo", path)).to eq([cmd3, cmd1])
+      expect(which_all("foo", path)).to eq([cmd_bar_baz_foo, cmd_foo])
     end
   end
 
@@ -183,14 +181,6 @@ describe "globally-scoped helper methods" do
     expect(which_editor).to eq("vemate -w")
   end
 
-  specify "#capture_stderr" do
-    err = capture_stderr do
-      $stderr.print "test"
-    end
-
-    expect(err).to eq("test")
-  end
-
   describe "#pretty_duration" do
     it "converts seconds to a human-readable string" do
       expect(pretty_duration(1)).to eq("1 second")
@@ -199,19 +189,6 @@ describe "globally-scoped helper methods" do
       expect(pretty_duration(240)).to eq("4 minutes")
       expect(pretty_duration(252.45)).to eq("4 minutes 12 seconds")
     end
-  end
-
-  specify "#parse_author!" do
-    parse_error_msg = /Unable to parse name and email/
-
-    expect(parse_author!("John Doe <john.doe@example.com>"))
-      .to eq({ name: "John Doe", email: "john.doe@example.com" })
-    expect { parse_author!("") }
-      .to raise_error(parse_error_msg)
-    expect { parse_author!("John Doe") }
-      .to raise_error(parse_error_msg)
-    expect { parse_author!("<john.doe@example.com>") }
-      .to raise_error(parse_error_msg)
   end
 
   specify "#disk_usage_readable" do
@@ -250,13 +227,13 @@ describe "globally-scoped helper methods" do
   describe "#odeprecated" do
     it "raises a MethodDeprecatedError when `disable` is true" do
       ENV.delete("HOMEBREW_DEVELOPER")
-      expect {
+      expect do
         odeprecated(
           "method", "replacement",
           caller:  ["#{HOMEBREW_LIBRARY}/Taps/homebrew/homebrew-core/"],
           disable: true
         )
-      }.to raise_error(
+      end.to raise_error(
         MethodDeprecatedError,
         %r{method.*replacement.*homebrew/core.*/Taps/homebrew/homebrew-core/}m,
       )
@@ -281,11 +258,11 @@ describe "globally-scoped helper methods" do
     end
 
     it "restores ENV if an exception is raised" do
-      expect {
+      expect do
         with_env(PATH: "/bin") do
           raise StandardError, "boom"
         end
-      }.to raise_error(StandardError)
+      end.to raise_error(StandardError)
 
       path = ENV.fetch("PATH", nil)
       expect(path).not_to be_nil

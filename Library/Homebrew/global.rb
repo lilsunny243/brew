@@ -7,27 +7,22 @@ require "English"
 require "fileutils"
 require "json"
 require "json/add/exception"
-require "ostruct"
 require "forwardable"
+require "set"
 
 # Only require "core_ext" here to ensure we're only requiring the minimum of
 # what we need.
-require "active_support/core_ext/object/blank"
-require "active_support/core_ext/string/filters"
-require "active_support/core_ext/object/try"
 require "active_support/core_ext/array/access"
-require "i18n"
-require "active_support/core_ext/hash/except"
-require "active_support/core_ext/kernel/reporting"
-require "active_support/core_ext/hash/keys"
-require "active_support/core_ext/hash/deep_merge"
-require "active_support/core_ext/file/atomic"
 require "active_support/core_ext/enumerable"
+require "active_support/core_ext/file/atomic"
+require "active_support/core_ext/hash/deep_merge"
+require "active_support/core_ext/hash/except"
+require "active_support/core_ext/hash/keys"
+require "active_support/core_ext/object/blank"
+require "active_support/core_ext/object/try"
 require "active_support/core_ext/string/exclude"
+require "active_support/core_ext/string/filters"
 require "active_support/core_ext/string/indent"
-
-I18n.backend.available_locales # Initialize locales so they can be overwritten.
-I18n.backend.store_translations :en, support: { array: { last_word_connector: " and " } }
 
 HOMEBREW_API_DEFAULT_DOMAIN = ENV.fetch("HOMEBREW_API_DEFAULT_DOMAIN").freeze
 HOMEBREW_BOTTLE_DEFAULT_DOMAIN = ENV.fetch("HOMEBREW_BOTTLE_DEFAULT_DOMAIN").freeze
@@ -62,6 +57,9 @@ HOMEBREW_MACOS_ARM_DEFAULT_REPOSITORY = ENV.fetch("HOMEBREW_MACOS_ARM_DEFAULT_RE
 HOMEBREW_LINUX_DEFAULT_PREFIX = ENV.fetch("HOMEBREW_LINUX_DEFAULT_PREFIX").freeze
 HOMEBREW_LINUX_DEFAULT_REPOSITORY = ENV.fetch("HOMEBREW_LINUX_DEFAULT_REPOSITORY").freeze
 HOMEBREW_PREFIX_PLACEHOLDER = "$HOMEBREW_PREFIX"
+# Needs a leading slash to avoid `File.expand.path` complaining about non-absolute home.
+HOMEBREW_HOME_PLACEHOLDER = "/$HOME"
+HOMEBREW_CASK_APPDIR_PLACEHOLDER = "$APPDIR"
 
 HOMEBREW_MACOS_NEWEST_UNSUPPORTED = ENV.fetch("HOMEBREW_MACOS_NEWEST_UNSUPPORTED").freeze
 HOMEBREW_MACOS_OLDEST_SUPPORTED = ENV.fetch("HOMEBREW_MACOS_OLDEST_SUPPORTED").freeze
@@ -73,9 +71,9 @@ HOMEBREW_PULL_OR_COMMIT_URL_REGEX =
   %r[https://github\.com/([\w-]+)/([\w-]+)?/(?:pull/(\d+)|commit/[0-9a-fA-F]{4,40})].freeze
 HOMEBREW_BOTTLES_EXTNAME_REGEX = /\.([a-z0-9_]+)\.bottle\.(?:(\d+)\.)?tar\.gz$/.freeze
 
+require "extend/module"
 require "env_config"
-require "compat/early" unless Homebrew::EnvConfig.no_compat?
-require "macos_versions"
+require "macos_version"
 require "os"
 require "messages"
 require "default_prefix"
@@ -124,15 +122,18 @@ module Homebrew
     def running_as_root_but_not_owned_by_root?
       running_as_root? && !owner_uid.zero?
     end
+
+    def auto_update_command?
+      ENV.fetch("HOMEBREW_AUTO_UPDATE_COMMAND", false).present?
+    end
   end
 end
 
 require "context"
 require "extend/array"
-require "extend/git_repository"
+require "git_repository"
 require "extend/pathname"
 require "extend/predicable"
-require "extend/module"
 require "cli/args"
 
 require "PATH"
@@ -144,8 +145,6 @@ rescue
   nil
 end.compact.freeze
 
-require "set"
-
 require "system_command"
 require "exceptions"
 require "utils"
@@ -153,5 +152,3 @@ require "utils"
 require "official_taps"
 require "tap"
 require "tap_constants"
-
-require "compat/late" unless Homebrew::EnvConfig.no_compat?

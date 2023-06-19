@@ -14,8 +14,6 @@ module Homebrew
       #
       # @api private
       class Sparkle
-        extend T::Sig
-
         # A priority of zero causes livecheck to skip the strategy. We do this
         # for {Sparkle} so we can selectively apply it when appropriate.
         PRIORITY = 0
@@ -46,8 +44,6 @@ module Homebrew
           :bundle_version,
           keyword_init: true,
         ) do
-          extend T::Sig
-
           extend Forwardable
 
           # @api public
@@ -111,8 +107,8 @@ module Homebrew
 
             if (minimum_system_version = item.elements["minimumSystemVersion"]&.text&.gsub(/\A\D+|\D+\z/, ""))
               macos_minimum_system_version = begin
-                OS::Mac::Version.new(minimum_system_version).strip_patch
-              rescue MacOSVersionError
+                MacOSVersion.new(minimum_system_version).strip_patch
+              rescue MacOSVersion::Error
                 nil
               end
 
@@ -146,7 +142,7 @@ module Homebrew
           params(
             content: String,
             regex:   T.nilable(Regexp),
-            block:   T.untyped,
+            block:   T.nilable(Proc),
           ).returns(T::Array[String])
         }
         def self.versions_from_content(content, regex = nil, &block)
@@ -181,7 +177,7 @@ module Homebrew
             url:     String,
             regex:   T.nilable(Regexp),
             _unused: T.nilable(T::Hash[Symbol, T.untyped]),
-            block:   T.untyped,
+            block:   T.nilable(Proc),
           ).returns(T::Hash[Symbol, T.untyped])
         }
         def self.find_versions(url:, regex: nil, **_unused, &block)
@@ -194,6 +190,7 @@ module Homebrew
 
           match_data.merge!(Strategy.page_content(url))
           content = match_data.delete(:content)
+          return match_data if content.blank?
 
           versions_from_content(content, regex, &block).each do |version_text|
             match_data[:matches][version_text] = Version.new(version_text)

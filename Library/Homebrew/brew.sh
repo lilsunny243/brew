@@ -81,7 +81,8 @@ case "$*" in
     ;;
   shellenv)
     source "${HOMEBREW_LIBRARY}/Homebrew/cmd/shellenv.sh"
-    homebrew-shellenv
+    shift
+    homebrew-shellenv "$1"
     exit 0
     ;;
   formulae)
@@ -269,17 +270,7 @@ auto-update() {
   # If we've checked for updates, we don't need to check again.
   export HOMEBREW_AUTO_UPDATE_CHECKED="1"
 
-  AUTO_UPDATE_COMMANDS=(
-    install
-    upgrade
-    bump-formula-pr
-    bump-cask-pr
-    bundle
-    release
-  )
-
-  if check-array-membership "${HOMEBREW_COMMAND}" "${AUTO_UPDATE_COMMANDS[@]}" ||
-     [[ "${HOMEBREW_COMMAND}" == "tap" && "${HOMEBREW_ARG_COUNT}" -gt 1 ]]
+  if [[ -n "${HOMEBREW_AUTO_UPDATE_COMMAND}" ]]
   then
     export HOMEBREW_AUTO_UPDATING="1"
 
@@ -470,7 +461,7 @@ esac
 # TODO: bump version when new macOS is released or announced
 # and also update references in docs/Installation.md,
 # https://github.com/Homebrew/install/blob/HEAD/install.sh and
-# MacOSVersions::SYMBOLS
+# MacOSVersion::SYMBOLS
 HOMEBREW_MACOS_NEWEST_UNSUPPORTED="14"
 # TODO: bump version when new macOS is released and also update
 # references in docs/Installation.md and
@@ -550,7 +541,7 @@ then
 
   # Set a variable when the macOS system Ruby is new enough to avoid spawning
   # a Ruby process unnecessarily.
-  if [[ "${HOMEBREW_MACOS_VERSION_NUMERIC}" -lt "120000" ]]
+  if [[ "${HOMEBREW_MACOS_VERSION_NUMERIC}" -lt "120601" ]]
   then
     unset HOMEBREW_MACOS_SYSTEM_RUBY_NEW_ENOUGH
   else
@@ -814,6 +805,22 @@ then
 
   # Don't allow non-developers to customise Ruby warnings.
   unset HOMEBREW_RUBY_WARNINGS
+fi
+
+# Check for commands that should call `brew update --auto-update` first.
+AUTO_UPDATE_COMMANDS=(
+  install
+  outdated
+  upgrade
+  bump-formula-pr
+  bump-cask-pr
+  bundle
+  release
+)
+if check-array-membership "${HOMEBREW_COMMAND}" "${AUTO_UPDATE_COMMANDS[@]}" ||
+   [[ "${HOMEBREW_COMMAND}" == "tap" && "${HOMEBREW_ARG_COUNT}" -gt 1 ]]
+then
+  export HOMEBREW_AUTO_UPDATE_COMMAND="1"
 fi
 
 # Disable Ruby options we don't need.

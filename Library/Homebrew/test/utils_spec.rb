@@ -1,4 +1,3 @@
-# typed: false
 # frozen_string_literal: true
 
 require "utils"
@@ -33,6 +32,19 @@ describe Utils do
     end
   end
 
+  specify ".parse_author!" do
+    parse_error_msg = /Unable to parse name and email/
+
+    expect(described_class.parse_author!("John Doe <john.doe@example.com>"))
+      .to eq({ name: "John Doe", email: "john.doe@example.com" })
+    expect { described_class.parse_author!("") }
+      .to raise_error(parse_error_msg)
+    expect { described_class.parse_author!("John Doe") }
+      .to raise_error(parse_error_msg)
+    expect { described_class.parse_author!("<john.doe@example.com>") }
+      .to raise_error(parse_error_msg)
+  end
+
   describe ".pluralize" do
     it "combines the stem with the default suffix based on the count" do
       expect(described_class.pluralize("foo", 0)).to eq("foos")
@@ -57,11 +69,17 @@ describe Utils do
       expect(described_class.pluralize("foo", 1, singular: "o", plural: "es")).to eq("fooo")
       expect(described_class.pluralize("foo", 2, singular: "o", plural: "es")).to eq("fooes")
     end
+
+    it "includes the count when requested" do
+      expect(described_class.pluralize("foo", 0, include_count: true)).to eq("0 foos")
+      expect(described_class.pluralize("foo", 1, include_count: true)).to eq("1 foo")
+      expect(described_class.pluralize("foo", 2, include_count: true)).to eq("2 foos")
+    end
   end
 
   describe ".underscore" do
     # commented out entries require acronyms inflections
-    let(:words) {
+    let(:words) do
       [
         ["API", "api"],
         ["APIController", "api_controller"],
@@ -86,7 +104,7 @@ describe Utils do
         ["Restfully", "restfully"],
         ["RoRails", "ro_rails"],
       ]
-    }
+    end
 
     it "converts strings to underscore case" do
       words.each do |camel, under|

@@ -871,24 +871,40 @@ Another example would be configuration files that should not be overwritten on p
 
 There are two ways to add `launchd` plists and `systemd` services to a formula, so that [`brew services`](https://github.com/Homebrew/homebrew-services) can pick them up:
 
-1. If the package already provides a service file the formula can install it into the prefix:
+1. If the package already provides a service file the formula can reference it by name:
 
    ```ruby
-   prefix.install_symlink "file.plist" => "#{plist_name}.plist"
-   prefix.install_symlink "file.service" => "#{service_name}.service"
+   service do
+     name macos: "custom.launchd.name",
+          linux: "custom.systemd.name"
+   end
    ```
+
+   To find the file we append `.plist` to the `launchd` service name and `.service` to the `systemd` service name internally.
 
 2. If the formula does not provide a service file you can generate one using the following stanza:
 
    ```ruby
+   # 1. An individual command
    service do
-     run bin/"script"
+     run opt_bin/"script"
+   end
+
+   # 2. A command with arguments
+   service do
+     run [opt_bin/"script", "--config", etc/"dir/config.yml"]
+   end
+
+   # 3. OS specific commands (If you omit one, the service file won't get generated for that OS.)
+   service do
+     run macos: [opt_bin/"macos_script", "standalone"],
+         linux: var/"special_linux_script"
    end
    ```
 
 #### Service block methods
 
-This table lists the options you can set within a `service` block. Only the `run` field is required which indicates what to run.
+This table lists the options you can set within a `service` block. The `run` or `name` field must be defined inside the service block. The `run` field indicates what command to run and is required before using fields other than `name`.
 
 | method                  | default      | macOS | Linux | description |
 | ----------------------- | ------------ | :---: | :---: | ----------- |
@@ -909,6 +925,7 @@ This table lists the options you can set within a `service` block. Only the `run
 | `process_type`          | -            |  yes  | no-op | type of process to manage: `:background`, `:standard`, `:interactive` or `:adaptive`
 | `macos_legacy_timers`   | -            |  yes  | no-op | timers created by `launchd` jobs are coalesced unless this is set
 | `sockets`               | -            |  yes  | no-op | socket that is created as an accesspoint to the service
+| `name`                  | -            |  yes  |  yes  | a hash with the `launchd` service name on macOS and/or the `systemd` service name on Linux
 
 For services that are kept alive after starting you can use the default `run_type`:
 
@@ -965,7 +982,7 @@ Same as above in hash form:
 ```ruby
 service do
   run [opt_bin/"beanstalkd", "test"]
-  keep_alive { always: true }
+  keep_alive always: true
 end
 ```
 
@@ -974,7 +991,7 @@ Keep alive until the service exits with a non-zero return code:
 ```ruby
 service do
   run [opt_bin/"beanstalkd", "test"]
-  keep_alive { succesful_exit: true }
+  keep_alive succesful_exit: true
 end
 ```
 
@@ -983,7 +1000,7 @@ Keep alive only if the job crashed:
 ```ruby
 service do
   run [opt_bin/"beanstalkd", "test"]
-  keep_alive { crashed: true }
+  keep_alive crashed: true
 end
 ```
 
@@ -992,7 +1009,7 @@ Keep alive as long as a file exists:
 ```ruby
 service do
   run [opt_bin/"beanstalkd", "test"]
-  keep_alive { path: "/some/path" }
+  keep_alive path: "/some/path"
 end
 ```
 

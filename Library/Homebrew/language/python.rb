@@ -1,4 +1,4 @@
-# typed: false
+# typed: true
 # frozen_string_literal: true
 
 module Language
@@ -7,10 +7,10 @@ module Language
   # @api public
   module Python
     def self.major_minor_version(python)
-      version = /\d\.\d+/.match `#{python} --version 2>&1`
+      version = `#{python} --version 2>&1`.chomp[/(\d\.\d+)/, 1]
       return unless version
 
-      Version.create(version.to_s)
+      Version.new(version)
     end
 
     def self.homebrew_site_packages(python = "python3.7")
@@ -124,8 +124,6 @@ module Language
 
     # Mixin module for {Formula} adding virtualenv support features.
     module Virtualenv
-      extend T::Sig
-
       # Instantiates, creates, and yields a {Virtualenv} object for use from
       # {Formula#install}, which provides helper methods for instantiating and
       # installing packages into a Python virtualenv.
@@ -264,14 +262,14 @@ module Language
         #   Multiline strings are allowed and treated as though they represent
         #   the contents of a `requirements.txt`.
         # @return [void]
-        def pip_install(targets)
+        def pip_install(targets, build_isolation: true)
           targets = Array(targets)
           targets.each do |t|
             if t.respond_to? :stage
-              t.stage { do_install Pathname.pwd }
+              t.stage { do_install(Pathname.pwd, build_isolation: build_isolation) }
             else
               t = t.lines.map(&:strip) if t.respond_to?(:lines) && t.include?("\n")
-              do_install t
+              do_install(t, build_isolation: build_isolation)
             end
           end
         end
@@ -281,11 +279,11 @@ module Language
         #
         # @param (see #pip_install)
         # @return (see #pip_install)
-        def pip_install_and_link(targets, link_manpages: false)
+        def pip_install_and_link(targets, link_manpages: false, build_isolation: true)
           bin_before = Dir[@venv_root/"bin/*"].to_set
           man_before = Dir[@venv_root/"share/man/man*/*"].to_set if link_manpages
 
-          pip_install(targets)
+          pip_install(targets, build_isolation: build_isolation)
 
           bin_after = Dir[@venv_root/"bin/*"].to_set
           bin_to_link = (bin_after - bin_before).to_a
@@ -301,12 +299,15 @@ module Language
 
         private
 
-        def do_install(targets)
+        def do_install(targets, build_isolation: true)
           targets = Array(targets)
-          @formula.system @venv_root/"bin/pip", "install",
-                          "-v", "--no-deps", "--no-binary", ":all:",
-                          "--use-feature=no-binary-enable-wheel-cache",
-                          "--ignore-installed", *targets
+          args = [
+            "-v", "--no-deps", "--no-binary", ":all:",
+            "--use-feature=no-binary-enable-wheel-cache",
+            "--ignore-installed"
+          ]
+          args << "--no-build-isolation" unless build_isolation
+          @formula.system @venv_root/"bin/pip", "install", *args, *targets
         end
       end
     end

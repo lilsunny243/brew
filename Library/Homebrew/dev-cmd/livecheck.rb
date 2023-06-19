@@ -7,8 +7,6 @@ require "livecheck/livecheck"
 require "livecheck/strategy"
 
 module Homebrew
-  extend T::Sig
-
   module_function
 
   WATCHLIST_PATH = File.expand_path(Homebrew::EnvConfig.livecheck_watchlist).freeze
@@ -95,7 +93,7 @@ module Homebrew
                         .reject { |line| line.start_with?("#") || line.blank? }
                         .map(&:strip)
 
-        named_args = T.unsafe(CLI::NamedArgs).new(*names, parent: args)
+        named_args = CLI::NamedArgs.new(*names, parent: args)
         named_args.to_formulae_and_casks(ignore_unavailable: true)
       rescue Errno::ENOENT => e
         onoe e

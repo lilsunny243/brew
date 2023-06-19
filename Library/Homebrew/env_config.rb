@@ -1,20 +1,16 @@
 # typed: true
 # frozen_string_literal: true
 
+require "set"
+
 module Homebrew
   # Helper module for querying Homebrew-specific environment variables.
   #
   # @api private
   module EnvConfig
-    extend T::Sig
-
     module_function
 
     ENVS = {
-      HOMEBREW_ADDITIONAL_GOOGLE_ANALYTICS_ID:   {
-        description: "Additional Google Analytics tracking ID to emit user behaviour analytics to. " \
-                     "For more information, see: <https://docs.brew.sh/Analytics>",
-      },
       HOMEBREW_API_DOMAIN:                       {
         description:  "Use this URL as the download mirror for Homebrew JSON API. " \
                       "If metadata files at that URL are temporarily unavailable, " \
@@ -264,7 +260,8 @@ module Homebrew
         },
       },
       HOMEBREW_NO_ANALYTICS:                     {
-        description: "If set, do not send analytics. For more information, see: <https://docs.brew.sh/Analytics>",
+        description: "If set, do not send analytics. Google Analytics were destroyed. " \
+                     "For more information, see: <https://docs.brew.sh/Analytics>",
         boolean:     true,
       },
       HOMEBREW_NO_AUTO_UPDATE:                   {
@@ -286,21 +283,12 @@ module Homebrew
         default_text: "`$NO_COLOR`.",
         boolean:      true,
       },
-      HOMEBREW_NO_COMPAT:                        {
-        description: "If set, disable all use of legacy compatibility code.",
-        boolean:     true,
-      },
       HOMEBREW_NO_EMOJI:                         {
         description: "If set, do not print `HOMEBREW_INSTALL_BADGE` on a successful build.",
         boolean:     true,
       },
       HOMEBREW_NO_ENV_HINTS:                     {
         description: "If set, do not print any hints about changing Homebrew's behaviour with environment variables.",
-        boolean:     true,
-      },
-      HOMEBREW_NO_GOOGLE_ANALYTICS:              {
-        description: "If set, do not send analytics to Google Analytics but allow sending to Homebrew's InfluxDB " \
-                     "analytics server. For more information, see: <https://docs.brew.sh/Analytics>",
         boolean:     true,
       },
       HOMEBREW_NO_GITHUB_API:                    {
@@ -344,6 +332,10 @@ module Homebrew
       },
       HOMEBREW_PRY:                              {
         description: "If set, use Pry for the `brew irb` command.",
+        boolean:     true,
+      },
+      HOMEBREW_UPGRADE_GREEDY:                   {
+        description: "If set, pass `--greedy` to all cask upgrade commands.",
         boolean:     true,
       },
       HOMEBREW_SIMULATE_MACOS_ON_LINUX:          {
@@ -413,6 +405,7 @@ module Homebrew
       },
     }.freeze
 
+    sig { params(env: Symbol, hash: T::Hash[Symbol, T.untyped]).returns(String) }
     def env_method_name(env, hash)
       method_name = env.to_s
                        .sub(/^HOMEBREW_/, "")
@@ -421,12 +414,15 @@ module Homebrew
       method_name
     end
 
-    CUSTOM_IMPLEMENTATIONS = %w[
-      HOMEBREW_MAKE_JOBS
-      HOMEBREW_CASK_OPTS
-    ].freeze
+    CUSTOM_IMPLEMENTATIONS = Set.new([
+      :HOMEBREW_MAKE_JOBS,
+      :HOMEBREW_CASK_OPTS,
+    ]).freeze
 
     ENVS.each do |env, hash|
+      # Needs a custom implementation.
+      next if CUSTOM_IMPLEMENTATIONS.include?(env)
+
       method_name = env_method_name(env, hash)
       env = env.to_s
 
@@ -435,9 +431,6 @@ module Homebrew
           ENV[env].present?
         end
       elsif hash[:default].present?
-        # Needs a custom implementation.
-        next if CUSTOM_IMPLEMENTATIONS.include?(env)
-
         define_method(method_name) do
           ENV[env].presence || hash.fetch(:default).to_s
         end

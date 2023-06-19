@@ -3,6 +3,8 @@
 
 require "migrator"
 require "formulary"
+require "cask/cask_loader"
+require "cask/migrator"
 require "descriptions"
 require "cleanup"
 require "description_cache_store"
@@ -11,8 +13,6 @@ require "settings"
 require "linuxbrew-core-migration"
 
 module Homebrew
-  extend T::Sig
-
   module_function
 
   def auto_update_header(args:)
@@ -160,7 +160,7 @@ module Homebrew
 
     updated_taps = []
     Tap.each do |tap|
-      next unless tap.git?
+      next if !tap.git? || tap.git_repo.origin_url.nil?
       next if (tap.core_tap? || tap == "homebrew/cask") && !Homebrew::EnvConfig.no_install_from_api?
 
       if ENV["HOMEBREW_MIGRATE_LINUXBREW_FORMULAE"].present? && tap.core_tap? &&
@@ -225,30 +225,30 @@ module Homebrew
             updated_taps << tap.name
             hub.add(reporter, auto_update: args.auto_update?)
           end
+        else
+          FileUtils.cp names_txt, names_before_txt
         end
-
-        FileUtils.cp names_txt, names_before_txt
       end
     end
 
     unless updated_taps.empty?
       auto_update_header args: args
-      noun = Utils.pluralize("tap", updated_taps.count)
-      puts "Updated #{updated_taps.count} #{noun} (#{updated_taps.to_sentence})."
+      puts "Updated #{Utils.pluralize("tap", updated_taps.count, include_count: true)} (#{updated_taps.to_sentence})."
       updated = true
     end
 
     if updated
       if hub.empty?
-        puts "No changes to formulae." unless args.quiet?
+        puts no_changes_message unless args.quiet?
       else
         if ENV.fetch("HOMEBREW_UPDATE_REPORT_ONLY_INSTALLED", false)
           opoo "HOMEBREW_UPDATE_REPORT_ONLY_INSTALLED is now the default behaviour, " \
                "so you can unset it from your environment."
         end
 
-        hub.dump(updated_formula_report: !args.auto_update?) unless args.quiet?
+        hub.dump(auto_update: args.auto_update?) unless args.quiet?
         hub.reporters.each(&:migrate_tap_migration)
+        hub.reporters.each(&:migrate_cask_rename)
         hub.reporters.each { |r| r.migrate_formula_rename(force: args.force?, verbose: args.verbose?) }
 
         CacheStoreDatabase.use(:descriptions) do |db|
@@ -302,6 +302,10 @@ module Homebrew
       The #{new_tag} changelog can be found at:
         #{Formatter.url("https://github.com/Homebrew/brew/releases/tag/#{new_tag}")}
     EOS
+  end
+
+  def no_changes_message
+    "No changes to formulae or casks."
   end
 
   def shorten_revision(revision)
@@ -376,7 +380,7 @@ class Reporter
       src = Pathname.new paths.first
       dst = Pathname.new paths.last
 
-      next unless dst.extname == ".rb"
+      next if dst.extname != ".rb"
 
       if paths.any? { |p| tap.cask_file?(p) }
         case status
@@ -389,6 +393,14 @@ class Reporter
         when "M"
           # Report updated casks
           @report[:MC] << tap.formula_file_to_name(src)
+        when /^R\d{0,3}/
+          src_full_name = tap.formula_file_to_name(src)
+          dst_full_name = tap.formula_file_to_name(dst)
+          # Don't report formulae that are moved within a tap but not renamed
+          next if src_full_name == dst_full_name
+
+          @report[:DC] << src_full_name
+          @report[:AC] << dst_full_name
         end
       end
 
@@ -413,6 +425,41 @@ class Reporter
         @report[:D] << src_full_name
         @report[:A] << dst_full_name
       end
+    end
+
+    renamed_casks = Set.new
+    @report[:DC].each do |old_full_name|
+      old_name = old_full_name.split("/").last
+      new_name = tap.cask_renames[old_name]
+      next unless new_name
+
+      new_full_name = if tap.name == "homebrew/cask"
+        new_name
+      else
+        "#{tap}/#{new_name}"
+      end
+
+      renamed_casks << [old_full_name, new_full_name] if @report[:AC].include?(new_full_name)
+    end
+
+    @report[:AC].each do |new_full_name|
+      new_name = new_full_name.split("/").last
+      old_name = tap.cask_renames.key(new_name)
+      next unless old_name
+
+      old_full_name = if tap.name == "homebrew/cask"
+        old_name
+      else
+        "#{tap}/#{old_name}"
+      end
+
+      renamed_casks << [old_full_name, new_full_name]
+    end
+
+    if renamed_casks.any?
+      @report[:AC] -= renamed_casks.map(&:last)
+      @report[:DC] -= renamed_casks.map(&:first)
+      @report[:RC] = renamed_casks.to_a
     end
 
     renamed_formulae = Set.new
@@ -444,7 +491,7 @@ class Reporter
       renamed_formulae << [old_full_name, new_full_name]
     end
 
-    if renamed_formulae.present?
+    if renamed_formulae.any?
       @report[:A] -= renamed_formulae.map(&:last)
       @report[:D] -= renamed_formulae.map(&:first)
       @report[:R] = renamed_formulae.to_a
@@ -504,7 +551,7 @@ class Reporter
       next unless (dir = HOMEBREW_CELLAR/name).exist? # skip if formula is not installed.
 
       tabs = dir.subdirs.map { |d| Tab.for_keg(Keg.new(d)) }
-      next unless tabs.first.tap == tap # skip if installed formula is not from this tap.
+      next if tabs.first.tap != tap # skip if installed formula is not from this tap.
 
       new_tap = Tap.fetch(new_tap_name)
       # For formulae migrated to cask: Auto-install cask or provide install instructions.
@@ -540,31 +587,30 @@ class Reporter
     end
   end
 
+  def migrate_cask_rename
+    Cask::Caskroom.casks.each do |cask|
+      Cask::Migrator.migrate_if_needed(cask)
+    end
+  end
+
   def migrate_formula_rename(force:, verbose:)
     Formula.installed.each do |formula|
       next unless Migrator.needs_migration?(formula)
 
-      oldname = formula.oldname
-      oldname_rack = HOMEBREW_CELLAR/oldname
+      oldnames_to_migrate = formula.oldnames.select do |oldname|
+        oldname_rack = HOMEBREW_CELLAR/oldname
+        next false unless oldname_rack.exist?
 
-      if oldname_rack.subdirs.empty?
-        oldname_rack.rmdir_if_possible
-        next
+        if oldname_rack.subdirs.empty?
+          oldname_rack.rmdir_if_possible
+          next false
+        end
+
+        true
       end
+      next if oldnames_to_migrate.empty?
 
-      new_name = tap.formula_renames[oldname]
-      next unless new_name
-
-      new_full_name = "#{tap}/#{new_name}"
-
-      begin
-        f = Formulary.factory(new_full_name)
-      rescue Exception => e # rubocop:disable Lint/RescueException
-        onoe "#{e.message}\n#{e.backtrace&.join("\n")}" if Homebrew::EnvConfig.developer?
-        next
-      end
-
-      Migrator.migrate_if_needed(f, force: force)
+      Migrator.migrate_if_needed(formula, force: force)
     end
   end
 
@@ -581,7 +627,7 @@ class Reporter
     @diff ||= if installed_from_api?
       # Hack `git diff` output with regexes to look like `git diff-tree` output.
       # Yes, I know this is a bit filthy but it saves duplicating the #report logic.
-      diff_output = Utils.popen_read("git", "diff", api_names_txt, api_names_before_txt)
+      diff_output = Utils.popen_read("git", "diff", "--no-ext-diff", api_names_before_txt, api_names_txt)
       header_regex = /^(---|\+\+\+) /.freeze
       add_delete_characters = ["+", "-"].freeze
 
@@ -604,10 +650,6 @@ class Reporter
 end
 
 class ReporterHub
-  extend T::Sig
-
-  extend Forwardable
-
   attr_reader :reporters
 
   sig { void }
@@ -626,9 +668,11 @@ class ReporterHub
     @hash.update(report) { |_key, oldval, newval| oldval.concat(newval) }
   end
 
-  delegate empty?: :@hash
+  def empty?
+    @hash.empty?
+  end
 
-  def dump(updated_formula_report: true)
+  def dump(auto_update: false)
     report_all = ENV["HOMEBREW_UPDATE_REPORT_ALL_FORMULAE"].present?
     if report_all && !Homebrew::EnvConfig.no_install_from_api?
       odeprecated "HOMEBREW_UPDATE_REPORT_ALL_FORMULAE"
@@ -639,16 +683,17 @@ class ReporterHub
     dump_new_formula_report
     dump_new_cask_report
     dump_renamed_formula_report if report_all
+    dump_renamed_cask_report if report_all
     dump_deleted_formula_report(report_all)
     dump_deleted_cask_report(report_all)
 
     outdated_formulae = []
     outdated_casks = []
 
-    if updated_formula_report && report_all
+    if !auto_update && report_all
       dump_modified_formula_report
       dump_modified_cask_report
-    elsif updated_formula_report
+    elsif !auto_update
       outdated_formulae = Formula.installed.select(&:outdated?).map(&:name)
       output_dump_formula_or_cask_report "Outdated Formulae", outdated_formulae
 
@@ -656,12 +701,12 @@ class ReporterHub
       output_dump_formula_or_cask_report "Outdated Casks", outdated_casks
     elsif report_all
       if (changed_formulae = select_formula_or_cask(:M).count) && changed_formulae.positive?
-        noun = Utils.pluralize("formula", changed_formulae, plural: "e")
-        ohai "Modified Formulae", "Modified #{changed_formulae} #{noun}."
+        ohai "Modified Formulae",
+             "Modified #{Utils.pluralize("formula", changed_formulae, plural: "e", include_count: true)}."
       end
 
       if (changed_casks = select_formula_or_cask(:MC).count) && changed_casks.positive?
-        ohai "Modified Casks", "Modified #{changed_casks} #{Utils.pluralize("cask", changed_casks)}."
+        ohai "Modified Casks", "Modified #{Utils.pluralize("cask", changed_casks, include_count: true)}."
       end
     else
       outdated_formulae = Formula.installed.select(&:outdated?).map(&:name)
@@ -694,8 +739,12 @@ class ReporterHub
     return if msg.blank?
 
     puts
+    puts "You have #{msg} installed."
+    # If we're auto-updating, don't need to suggest commands that we're perhaps
+    # already running.
+    return if auto_update
+
     puts <<~EOS
-      You have #{msg} installed.
       You can upgrade #{update_pronoun} with #{Tty.bold}brew upgrade#{Tty.reset}
       or list #{update_pronoun} with #{Tty.bold}brew outdated#{Tty.reset}.
     EOS
@@ -725,6 +774,16 @@ class ReporterHub
     end
 
     output_dump_formula_or_cask_report "Renamed Formulae", formulae
+  end
+
+  def dump_renamed_cask_report
+    casks = select_formula_or_cask(:RC).sort.map do |name, new_name|
+      name = pretty_installed(name) if installed?(name)
+      new_name = pretty_installed(new_name) if installed?(new_name)
+      "#{name} -> #{new_name}"
+    end
+
+    output_dump_formula_or_cask_report "Renamed Casks", casks
   end
 
   def dump_deleted_formula_report(report_all)

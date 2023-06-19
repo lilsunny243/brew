@@ -1,23 +1,22 @@
-# typed: false
 # frozen_string_literal: true
 
 require "exceptions"
 
 describe "Exception" do
   describe MultipleVersionsInstalledError do
-    subject {
+    subject do
       described_class.new <<~EOS
         foo has multiple installed versions
         Run `brew uninstall --force foo` to remove all versions.
       EOS
-    }
+    end
 
-    its(:to_s) {
+    its(:to_s) do
       is_expected.to eq <<~EOS
         foo has multiple installed versions
         Run `brew uninstall --force foo` to remove all versions.
       EOS
-    }
+    end
   end
 
   describe NoSuchKegError do
@@ -29,9 +28,9 @@ describe "Exception" do
   describe FormulaValidationError do
     subject(:error) { described_class.new("foo", "sha257", "magic") }
 
-    its(:to_s) {
+    its(:to_s) do
       expect(error.to_s).to eq(%q(invalid attribute for formula 'foo': sha257 ("magic")))
-    }
+    end
   end
 
   describe TapFormulaOrCaskUnavailableError do
@@ -70,9 +69,9 @@ describe "Exception" do
         error.dependent = "foobar"
       end
 
-      its(:to_s) {
+      its(:to_s) do
         expect(error.to_s).to eq('No available formula with the name "foo" (dependency of foobar).')
-      }
+      end
     end
   end
 
@@ -101,17 +100,17 @@ describe "Exception" do
     context "when there are no classes" do
       let(:list) { [] }
 
-      its(:to_s) {
+      its(:to_s) do
         expect(error.to_s).to match(/Expected to find class Foo, but found no classes\./)
-      }
+      end
     end
 
     context "when the class is not derived from Formula" do
       let(:list) { [mod.const_get(:Bar)] }
 
-      its(:to_s) {
+      its(:to_s) do
         expect(error.to_s).to match(/Expected to find class Foo, but only found: Bar \(not derived from Formula!\)\./)
-      }
+      end
     end
 
     context "when the class is derived from Formula" do
@@ -203,10 +202,10 @@ describe "Exception" do
   end
 
   describe ChecksumMismatchError do
-    subject { described_class.new("/file.tar.gz", hash1, hash2) }
+    subject { described_class.new("/file.tar.gz", expected_checksum, actual_checksum) }
 
-    let(:hash1) { instance_double(Checksum, to_s: "deadbeef") }
-    let(:hash2) { instance_double(Checksum, to_s: "deadcafe") }
+    let(:expected_checksum) { instance_double(Checksum, to_s: "deadbeef") }
+    let(:actual_checksum) { instance_double(Checksum, to_s: "deadcafe") }
 
     its(:to_s) { is_expected.to match(/SHA256 mismatch/) }
   end

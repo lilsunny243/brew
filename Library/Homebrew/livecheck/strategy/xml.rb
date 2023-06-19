@@ -1,6 +1,8 @@
 # typed: true
 # frozen_string_literal: true
 
+require "rexml/document"
+
 module Homebrew
   module Livecheck
     module Strategy
@@ -27,8 +29,6 @@ module Homebrew
       #
       # @api public
       class Xml
-        extend T::Sig
-
         NICE_NAME = "XML"
 
         # A priority of zero causes livecheck to skip the strategy. We do this
@@ -55,8 +55,6 @@ module Homebrew
         # @return [REXML::Document, nil]
         sig { params(content: String).returns(T.nilable(REXML::Document)) }
         def self.parse_xml(content)
-          require "rexml/document"
-
           parsing_tries = 0
           begin
             REXML::Document.new(content)
@@ -87,7 +85,7 @@ module Homebrew
           params(
             content: String,
             regex:   T.nilable(Regexp),
-            block:   T.untyped,
+            block:   T.nilable(Proc),
           ).returns(T::Array[String])
         }
         def self.versions_from_content(content, regex = nil, &block)
@@ -123,7 +121,7 @@ module Homebrew
             provided_content: T.nilable(String),
             homebrew_curl:    T::Boolean,
             _unused:          T.nilable(T::Hash[Symbol, T.untyped]),
-            block:            T.untyped,
+            block:            T.nilable(Proc),
           ).returns(T::Hash[Symbol, T.untyped])
         }
         def self.find_versions(url:, regex: nil, provided_content: nil, homebrew_curl: false, **_unused, &block)

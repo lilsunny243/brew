@@ -2,11 +2,10 @@
 # frozen_string_literal: true
 
 module Hardware
-  extend T::Sig
   sig { params(version: T.nilable(Version)).returns(Symbol) }
   def self.oldest_cpu(version = nil)
     version = if version
-      MacOS::Version.new(version.to_s)
+      MacOSVersion.new(version.to_s)
     else
       MacOS.version
     end
