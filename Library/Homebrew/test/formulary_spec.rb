@@ -340,12 +340,12 @@ describe Formulary do
         expect(formula).to be_a(Formula)
 
         expect(formula.keg_only_reason.reason).to eq :provided_by_macos
+        expect(formula.declared_deps.count).to eq 6
         if OS.mac?
           expect(formula.deps.count).to eq 5
         else
           expect(formula.deps.count).to eq 6
         end
-        expect(formula.uses_from_macos_elements).to eq ["uses_from_macos_dep"]
 
         expect(formula.requirements.count).to eq 1
         req = formula.requirements.first
@@ -398,6 +398,7 @@ describe Formulary do
 
         formula = described_class.factory(formula_name)
         expect(formula).to be_a(Formula)
+        expect(formula.declared_deps.count).to eq 7
         expect(formula.deps.count).to eq 6
         expect(formula.deps.map(&:name).include?("variations_dep")).to be true
         expect(formula.deps.map(&:name).include?("uses_from_macos_dep")).to be false
@@ -409,6 +410,7 @@ describe Formulary do
 
         formula = described_class.factory(formula_name)
         expect(formula).to be_a(Formula)
+        expect(formula.declared_deps.count).to eq 6
         expect(formula.deps.count).to eq 6
         expect(formula.deps.map(&:name).include?("uses_from_macos_dep")).to be true
       end
@@ -419,6 +421,7 @@ describe Formulary do
 
         formula = described_class.factory(formula_name)
         expect(formula).to be_a(Formula)
+        expect(formula.declared_deps.count).to eq 6
         expect(formula.deps.count).to eq 5
         expect(formula.deps.map(&:name).include?("uses_from_macos_dep")).to be true
       end

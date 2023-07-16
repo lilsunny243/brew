@@ -383,7 +383,6 @@ class CurlDownloadStrategy < AbstractFileDownloadStrategy
   attr_reader :mirrors
 
   def initialize(url, name, version, **meta)
-    super
     @try_partial = true
     @mirrors = meta.fetch(:mirrors, [])
 
@@ -409,6 +408,10 @@ class CurlDownloadStrategy < AbstractFileDownloadStrategy
 
     begin
       url = urls.shift
+
+      if (domain = Homebrew::EnvConfig.artifact_domain)
+        url = url.sub(%r{^https?://#{GitHubPackages::URL_DOMAIN}/}o, "#{domain.chomp("/")}/")
+      end
 
       ohai "Downloading #{url}"
 
@@ -476,10 +479,6 @@ class CurlDownloadStrategy < AbstractFileDownloadStrategy
   def resolve_url_basename_time_file_size(url, timeout: nil)
     @resolved_info_cache ||= {}
     return @resolved_info_cache[url] if @resolved_info_cache.include?(url)
-
-    if (domain = Homebrew::EnvConfig.artifact_domain)
-      url = url.sub(%r{^https?://#{GitHubPackages::URL_DOMAIN}/}o, "#{domain.chomp("/")}/")
-    end
 
     parsed_output = curl_headers(url.to_s, wanted_headers: ["content-disposition"], timeout: timeout)
     parsed_headers = parsed_output.fetch(:responses).map { |r| r.fetch(:headers) }
@@ -628,8 +627,10 @@ class CurlGitHubPackagesDownloadStrategy < CurlDownloadStrategy
 
   private
 
-  def resolved_basename
-    @resolved_basename.presence || super
+  def resolve_url_basename_time_file_size(url, timeout: nil)
+    return super if @resolved_basename.blank?
+
+    [url, @resolved_basename, nil, nil, false]
   end
 end
 
@@ -736,7 +737,7 @@ class SubversionDownloadStrategy < VCSDownloadStrategy
   # @api public
   sig { returns(Time) }
   def source_modified_time
-    time = if Version.create(T.must(Utils::Svn.version)) >= Version.create("1.9")
+    time = if Version.new(T.must(Utils::Svn.version)) >= Version.new("1.9")
       out, = silent_command("svn", args: ["info", "--show-item", "last-changed-date"], chdir: cached_location)
       out
     else

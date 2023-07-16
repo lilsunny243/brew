@@ -210,8 +210,9 @@ class Formula
     @full_name = full_name_with_optional_tap(name)
     @full_alias_name = full_name_with_optional_tap(@alias_name)
 
-    spec_eval :stable
-    spec_eval :head
+    self.class.spec_syms.each do |sym|
+      spec_eval sym
+    end
 
     @active_spec = determine_active_spec(spec)
     @active_spec_sym = if head?
@@ -464,21 +465,19 @@ class Formula
   # Returns any `@`-versioned formulae names for any formula (including versioned formulae).
   sig { returns(T::Array[String]) }
   def versioned_formulae_names
-    versioned_paths = if tap
-      # Faster path, due to `tap.versioned_formula_files` caching.
+    versioned_names = if tap
       name_prefix = "#{name.gsub(/(@[\d.]+)?$/, "")}@"
-      tap.versioned_formula_files.select do |file|
-        file.basename.to_s.start_with?(name_prefix)
+      tap.formula_names.select do |name|
+        name.start_with?(name_prefix)
       end
-    else
+    elsif path.exist?
       Pathname.glob(path.to_s.gsub(/(@[\d.]+)?\.rb$/, "@*.rb"))
+              .map { |path| path.basename(".rb").to_s }
+    end.sort
+
+    versioned_names.reject do |versioned_name|
+      versioned_name == name
     end
-
-    versioned_paths.map do |versioned_path|
-      next if versioned_path == path
-
-      versioned_path.basename(".rb").to_s
-    end.compact.sort
   end
 
   # Returns any `@`-versioned Formula objects for any Formula (including versioned formulae).
@@ -501,7 +500,7 @@ class Formula
   # An old name for the formula.
   # @deprecated Use #{#oldnames} instead.
   def oldname
-    # odeprecated "Formula#oldname", "Formula#oldnames"
+    odeprecated "Formula#oldname", "Formula#oldnames"
     @oldname ||= oldnames.first
   end
 
@@ -532,6 +531,9 @@ class Formula
 
   # The {Dependency}s for the currently active {SoftwareSpec}.
   delegate deps: :active_spec
+
+  # The declared {Dependency}s for the currently active {SoftwareSpec} (i.e. including those provided by macOS)
+  delegate declared_deps: :active_spec
 
   # Dependencies provided by macOS for the currently active {SoftwareSpec}.
   delegate uses_from_macos_elements: :active_spec
@@ -1034,7 +1036,7 @@ class Formula
   # The generated launchd {.plist} file path.
   sig { returns(Pathname) }
   def plist_path
-    odeprecated "formula.plist_path", "formula.launchd_service_path"
+    odisabled "formula.plist_path", "formula.launchd_service_path"
     launchd_service_path
   end
 
@@ -1143,6 +1145,23 @@ class Formula
   def post_install; end
 
   # @private
+  sig { returns(T::Boolean) }
+  def post_install_defined?
+    method(:post_install).owner != Formula
+  end
+
+  # @private
+  sig { void }
+  def install_etc_var
+    etc_var_dirs = [bottle_prefix/"etc", bottle_prefix/"var"]
+    Find.find(*etc_var_dirs.select(&:directory?)) do |path|
+      path = Pathname.new(path)
+      path.extend(InstallRenamed)
+      path.cp_path_sub(bottle_prefix, HOMEBREW_PREFIX)
+    end
+  end
+
+  # @private
   sig { void }
   def run_post_install
     @prefix_returns_versioned_prefix = true
@@ -1163,13 +1182,6 @@ class Formula
       with_env(new_env) do
         ENV.clear_sensitive_environment!
         ENV.activate_extensions!
-
-        etc_var_dirs = [bottle_prefix/"etc", bottle_prefix/"var"]
-        Find.find(*etc_var_dirs.select(&:directory?)) do |path|
-          path = Pathname.new(path)
-          path.extend(InstallRenamed)
-          path.cp_path_sub(bottle_prefix, HOMEBREW_PREFIX)
-        end
 
         with_logging("post_install") do
           post_install
@@ -1817,12 +1829,6 @@ class Formula
     CoreTap.instance.formula_names
   end
 
-  # an array of all core {Formula} files
-  # @private
-  def self.core_files
-    CoreTap.instance.formula_files
-  end
-
   # an array of all tap {Formula} names
   # @private
   def self.tap_names
@@ -1841,12 +1847,6 @@ class Formula
     @names ||= (core_names + tap_names.map { |name| name.split("/").last }).uniq.sort
   end
 
-  # an array of all {Formula} files
-  # @private
-  def self.files
-    @files ||= core_files + tap_files
-  end
-
   # an array of all {Formula} names, which the tap formulae have the fully-qualified name
   # @private
   def self.full_names
@@ -1859,14 +1859,14 @@ class Formula
   def self.all
     # TODO: ideally avoid using ARGV by moving to e.g. CLI::Parser
     if ARGV.exclude?("--eval-all") && !Homebrew::EnvConfig.eval_all?
-      odeprecated "Formula#all without --all or HOMEBREW_EVAL_ALL"
+      odisabled "Formula#all without --eval-all or HOMEBREW_EVAL_ALL"
     end
 
-    files.map do |file|
-      Formulary.factory(file)
+    (core_names + tap_files).map do |name_or_file|
+      Formulary.factory(name_or_file)
     rescue FormulaUnavailableError, FormulaUnreadableError => e
       # Don't let one broken formula break commands. But do complain.
-      onoe "Failed to import: #{file}"
+      onoe "Failed to import: #{name_or_file}"
       $stderr.puts e
 
       nil
@@ -2113,9 +2113,31 @@ class Formula
     Checksum.new(Digest::SHA256.file(path).hexdigest) if path.exist?
   end
 
+  def merge_spec_dependables(dependables)
+    # We have a hash of specs names (stable/head) to dependency lists.
+    # Merge all of the dependency lists together, removing any duplicates.
+    all_dependables = [].union(*dependables.values.map(&:to_a))
+
+    all_dependables.map do |dependable|
+      {
+        dependable: dependable,
+        # Now find the list of specs each dependency was a part of.
+        specs:      dependables.map { |spec, spec_deps| spec if spec_deps&.include?(dependable) }.compact,
+      }
+    end
+  end
+  private :merge_spec_dependables
+
   # @private
   def to_hash
-    dependencies = deps
+    # Create a hash of spec names (stable/head) to the list of dependencies under each
+    dependencies = self.class.spec_syms.to_h do |sym|
+      [sym, send(sym)&.declared_deps]
+    end
+    dependencies.transform_values! { |deps| deps&.reject(&:implicit?) } # Remove all implicit deps from all lists
+    requirements = self.class.spec_syms.to_h do |sym|
+      [sym, send(sym)&.requirements]
+    end
 
     hsh = {
       "name"                     => name,
@@ -2140,25 +2162,13 @@ class Formula
       "keg_only"                 => keg_only?,
       "keg_only_reason"          => keg_only_reason&.to_hash,
       "options"                  => [],
-      "build_dependencies"       => dependencies.select(&:build?)
-                                                .map(&:name)
-                                                .uniq,
-      "dependencies"             => dependencies.reject(&:optional?)
-                                                .reject(&:recommended?)
-                                                .reject(&:build?)
-                                                .reject(&:test?)
-                                                .map(&:name)
-                                                .uniq,
-      "test_dependencies"        => dependencies.select(&:test?)
-                                                .map(&:name)
-                                                .uniq,
-      "recommended_dependencies" => dependencies.select(&:recommended?)
-                                                .map(&:name)
-                                                .uniq,
-      "optional_dependencies"    => dependencies.select(&:optional?)
-                                                .map(&:name)
-                                                .uniq,
-      "uses_from_macos"          => uses_from_macos_elements.uniq,
+      "build_dependencies"       => [],
+      "dependencies"             => [],
+      "test_dependencies"        => [],
+      "recommended_dependencies" => [],
+      "optional_dependencies"    => [],
+      "uses_from_macos"          => [],
+      "uses_from_macos_bounds"   => [],
       "requirements"             => [],
       "conflicts_with"           => conflicts.map(&:name),
       "conflicts_with_reasons"   => conflicts.map(&:reason),
@@ -2174,6 +2184,7 @@ class Formula
       "disabled"                 => disabled?,
       "disable_date"             => disable_date,
       "disable_reason"           => disable_reason,
+      "post_install_defined"     => post_install_defined?,
       "service"                  => (service.serialize if service?),
       "tap_git_head"             => tap_git_head,
       "ruby_source_path"         => ruby_source_path,
@@ -2202,7 +2213,56 @@ class Formula
       { "option" => opt.flag, "description" => opt.description }
     end
 
-    hsh["requirements"] = requirements.map do |req|
+    dependencies.each do |spec_sym, spec_deps|
+      next if spec_deps.nil?
+
+      dep_hash = if spec_sym == :stable
+        hsh
+      else
+        next if spec_deps == dependencies[:stable]
+
+        hsh["#{spec_sym}_dependencies"] ||= {}
+      end
+
+      dep_hash["build_dependencies"] = spec_deps.select(&:build?)
+                                                .reject(&:uses_from_macos?)
+                                                .map(&:name)
+                                                .uniq
+      dep_hash["dependencies"] = spec_deps.reject(&:optional?)
+                                          .reject(&:recommended?)
+                                          .reject(&:build?)
+                                          .reject(&:test?)
+                                          .reject(&:uses_from_macos?)
+                                          .map(&:name)
+                                          .uniq
+      dep_hash["test_dependencies"] = spec_deps.select(&:test?)
+                                               .reject(&:uses_from_macos?)
+                                               .map(&:name)
+                                               .uniq
+      dep_hash["recommended_dependencies"] = spec_deps.select(&:recommended?)
+                                                      .reject(&:uses_from_macos?)
+                                                      .map(&:name)
+                                                      .uniq
+      dep_hash["optional_dependencies"] = spec_deps.select(&:optional?)
+                                                   .reject(&:uses_from_macos?)
+                                                   .map(&:name)
+                                                   .uniq
+
+      uses_from_macos_deps = spec_deps.select(&:uses_from_macos?).uniq
+      dep_hash["uses_from_macos"] = uses_from_macos_deps.map do |dep|
+        if dep.tags.length >= 2
+          { dep.name => dep.tags }
+        elsif dep.tags.present?
+          { dep.name => dep.tags.first }
+        else
+          dep.name
+        end
+      end
+      dep_hash["uses_from_macos_bounds"] = uses_from_macos_deps.map(&:bounds)
+    end
+
+    hsh["requirements"] = merge_spec_dependables(requirements).map do |data|
+      req = data[:dependable]
       req_name = req.name.dup
       req_name.prepend("maximum_") if req.try(:comparator) == "<="
       {
@@ -2211,6 +2271,7 @@ class Formula
         "download" => req.download,
         "version"  => req.try(:version) || req.try(:arch),
         "contexts" => req.tags,
+        "specs"    => data[:specs],
       }
     end
 
@@ -2910,10 +2971,17 @@ class Formula
     # <pre>version_scheme 1</pre>
     attr_rw :version_scheme
 
+    # @private
+    def spec_syms
+      [:stable, :head].freeze
+    end
+
     # A list of the {.stable} and {.head} {SoftwareSpec}s.
     # @private
     def specs
-      [stable, head].freeze
+      spec_syms.map do |sym|
+        send(sym)
+      end.freeze
     end
 
     # @!attribute [w] url
@@ -3197,7 +3265,7 @@ class Formula
     #
     # @deprecated Please use {Homebrew::Service.require_root} instead.
     def plist_options(options)
-      odeprecated "plist_options", "service.require_root"
+      odisabled "plist_options", "service.require_root"
       @plist_startup = options[:startup]
       @plist_manual = options[:manual]
     end
@@ -3482,7 +3550,7 @@ class Formula
 
     # Permit links to certain libraries that don't exist. Available on Linux only.
     def ignore_missing_libraries(*libs)
-      odeprecated "ignore_missing_libraries"
+      odisabled "ignore_missing_libraries"
       unless Homebrew::SimulateSystem.simulating_or_running_on_linux?
         raise FormulaSpecificationError, "#{__method__} is available on Linux only"
       end

@@ -24,8 +24,7 @@ class SoftwareSpec
   }.freeze
 
   attr_reader :name, :full_name, :owner, :build, :resources, :patches, :options, :deprecated_flags,
-              :deprecated_options, :dependency_collector, :bottle_specification, :compiler_failures,
-              :uses_from_macos_elements
+              :deprecated_options, :dependency_collector, :bottle_specification, :compiler_failures
 
   def_delegators :@resource, :stage, :fetch, :verify_download_integrity, :source_modified_time, :download_name,
                  :cached_download, :clear_cache, :checksum, :mirrors, :specs, :using, :version, :mirror,
@@ -93,7 +92,7 @@ class SoftwareSpec
 
       raise "#{full_name}: version missing for \"#{r.name}\" resource!" if version.nil?
 
-      r.version(version.head? ? Version.create("HEAD") : version.dup)
+      r.version(version.head? ? Version.new("HEAD") : version.dup)
     end
     patches.each { |p| p.owner = self }
   end
@@ -195,28 +194,32 @@ class SoftwareSpec
       deps = [bounds.shift].to_h
     end
 
+    spec, tags = deps.is_a?(Hash) ? deps.first : deps
+    raise TypeError, "Dependency name must be a string!" unless spec.is_a?(String)
+
     @uses_from_macos_elements << deps
 
-    # Check whether macOS is new enough for dependency to not be required.
-    if Homebrew::SimulateSystem.simulating_or_running_on_macos?
-      # Assume the oldest macOS version when simulating a generic macOS version
-      return if Homebrew::SimulateSystem.current_os == :macos && !bounds.key?(:since)
-
-      if Homebrew::SimulateSystem.current_os != :macos
-        current_os = MacOSVersion.from_symbol(Homebrew::SimulateSystem.current_os)
-        since_os = MacOSVersion.from_symbol(bounds[:since]) if bounds.key?(:since)
-        return if current_os >= since_os
-      end
-    end
-
-    depends_on deps
+    depends_on UsesFromMacOSDependency.new(spec, Array(tags), bounds: bounds)
   end
 
+  # @deprecated
+  def uses_from_macos_elements
+    # TODO: remove all @uses_from_macos_elements when disabling or removing this method
+    odeprecated "#uses_from_macos_elements", "#declared_deps"
+    @uses_from_macos_elements
+  end
+
+  # @deprecated
   def uses_from_macos_names
+    odeprecated "#uses_from_macos_names", "#declared_deps"
     uses_from_macos_elements.flat_map { |e| e.is_a?(Hash) ? e.keys : e }
   end
 
   def deps
+    dependency_collector.deps.dup_without_system_deps
+  end
+
+  def declared_deps
     dependency_collector.deps
   end
 
@@ -277,7 +280,7 @@ end
 class HeadSoftwareSpec < SoftwareSpec
   def initialize(flags: [])
     super
-    @resource.version(Version.create("HEAD"))
+    @resource.version(Version.new("HEAD"))
   end
 
   def verify_download_integrity(_filename)

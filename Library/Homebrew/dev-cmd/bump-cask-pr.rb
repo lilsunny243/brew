@@ -52,7 +52,7 @@ module Homebrew
       conflicts "--dry-run", "--write"
       conflicts "--no-audit", "--online"
 
-      named_args :cask, number: 1
+      named_args :cask, number: 1, without_api: true
     end
   end
 
@@ -227,9 +227,9 @@ module Homebrew
       if args.no_audit?
         ohai "Skipping `brew audit`"
       elsif args.online?
-        ohai "brew audit --cask --online #{cask.sourcefile_path.basename}"
+        ohai "brew audit --cask --online #{cask.full_name}"
       else
-        ohai "brew audit --cask #{cask.sourcefile_path.basename}"
+        ohai "brew audit --cask #{cask.full_name}"
       end
       return
     end

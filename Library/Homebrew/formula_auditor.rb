@@ -35,6 +35,7 @@ module Homebrew
       @specs = %w[stable head].map { |s| formula.send(s) }.compact
       @spdx_license_data = options[:spdx_license_data]
       @spdx_exception_data = options[:spdx_exception_data]
+      @tap_audit = options[:tap_audit]
     end
 
     def audit_style
@@ -253,7 +254,7 @@ module Homebrew
       @specs.each do |spec|
         # Check for things we don't like to depend on.
         # We allow non-Homebrew installs whenever possible.
-        spec.deps.each do |dep|
+        spec.declared_deps.each do |dep|
           begin
             dep_f = dep.to_formula
           rescue TapFormulaUnavailableError
@@ -270,12 +271,13 @@ module Homebrew
             next
           end
 
-          if dep_f.oldname && dep.name.split("/").last == dep_f.oldname
+          if dep_f.oldnames.include?(dep.name.split("/").last)
             problem "Dependency '#{dep.name}' was renamed; use new name '#{dep_f.name}'."
           end
 
           if @core_tap &&
              @new_formula &&
+             !dep.uses_from_macos? &&
              dep_f.keg_only? &&
              dep_f.keg_only_reason.provided_by_macos? &&
              dep_f.keg_only_reason.applicable? &&
@@ -321,8 +323,15 @@ module Homebrew
             EOS
           end
 
+          if dep_f.disabled? && !formula.disabled?
+            problem <<~EOS
+              Dependency '#{dep.name}' is disabled but has un-disabled dependents. Either
+              un-disable '#{dep.name}' or disable it and all of its dependents.
+            EOS
+          end
+
           # we want to allow uses_from_macos for aliases but not bare dependencies
-          if self.class.aliases.include?(dep.name) && spec.uses_from_macos_names.exclude?(dep.name)
+          if self.class.aliases.include?(dep.name) && !dep.uses_from_macos?
             problem "Dependency '#{dep.name}' is an alias; use the canonical name '#{dep.to_formula.full_name}'."
           end
 
@@ -345,20 +354,25 @@ module Homebrew
       # TODO: remove this and check these there too.
       return if Homebrew::SimulateSystem.simulating_or_running_on_linux?
 
-      # Skip the versioned dependencies conflict audit on the OpenSSL migration branch.
-      # TODO: Remove this when OpenSSL migration is complete.
-      ignore_openssl_conflict = if (github_event_path = ENV.fetch("GITHUB_EVENT_PATH", nil)).present?
-        event_payload = JSON.parse(File.read(github_event_path))
-        head_info = event_payload.dig("pull_request", "head").to_h # handle `nil`
+      # Skip the versioned dependencies conflict audit for *-staging branches.
+      # This will allow us to migrate dependents of formulae like Python or OpenSSL
+      # gradually over separate PRs which target a *-staging branch. See:
+      #   https://github.com/Homebrew/homebrew-core/pull/134260
+      ignore_formula_conflict, staging_formula =
+        if @tap_audit && (github_event_path = ENV.fetch("GITHUB_EVENT_PATH", nil)).present?
+          event_payload = JSON.parse(File.read(github_event_path))
+          base_info = event_payload.dig("pull_request", "base").to_h # handle `nil`
 
-        # We need to read the head ref from `GITHUB_EVENT_PATH` because
-        # `git branch --show-current` returns `master` on PR branches.
-        openssl_migration_branch = head_info["ref"] == "openssl-migration"
-        homebrew_owned_repo = head_info.dig("repo", "owner", "login") == "Homebrew"
-        homebrew_core_pr = head_info.dig("repo", "name") == "homebrew-core"
+          # We need to read the head ref from `GITHUB_EVENT_PATH` because
+          # `git branch --show-current` returns `master` on PR branches.
+          staging_branch = base_info["ref"]&.end_with?("-staging")
+          homebrew_owned_repo = base_info.dig("repo", "owner", "login") == "Homebrew"
+          homebrew_core_pr = base_info.dig("repo", "name") == "homebrew-core"
+          # Support staging branches named `formula-staging` or `formula@version-staging`.
+          base_formula = base_info["ref"]&.split(/-|@/, 2)&.first
 
-        openssl_migration_branch && homebrew_owned_repo && homebrew_core_pr
-      end
+          [staging_branch && homebrew_owned_repo && homebrew_core_pr, base_formula]
+        end
 
       recursive_runtime_formulae = formula.runtime_formula_dependencies(undeclared: false)
       version_hash = {}
@@ -366,7 +380,7 @@ module Homebrew
       recursive_runtime_formulae.each do |f|
         name = f.name
         unversioned_name, = name.split("@")
-        next if unversioned_name == "openssl" && ignore_openssl_conflict
+        next if ignore_formula_conflict && unversioned_name == staging_formula
         # Allow use of the full versioned name (e.g. `python@3.99`) or an unversioned alias (`python`).
         next if formula.tap&.audit_exception :versioned_formula_dependent_conflicts_allowlist, name
         next if formula.tap&.audit_exception :versioned_formula_dependent_conflicts_allowlist, unversioned_name
@@ -693,10 +707,10 @@ module Homebrew
       when %r{download\.gnome\.org/sources}, %r{ftp\.gnome\.org/pub/GNOME/sources}i
         version_prefix = stable.version.major_minor
         return if formula.tap&.audit_exception :gnome_devel_allowlist, formula.name, version_prefix
-        return if stable_url_version < Version.create("1.0")
+        return if stable_url_version < Version.new("1.0")
         # All minor versions are stable in the new GNOME version scheme (which starts at version 40.0)
         # https://discourse.gnome.org/t/new-gnome-versioning-scheme/4235
-        return if stable_url_version >= Version.create("40.0")
+        return if stable_url_version >= Version.new("40.0")
         return if stable_url_minor_version.even?
 
         problem "#{stable.version} is a development release"

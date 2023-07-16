@@ -39,7 +39,7 @@ module Homebrew
   def pr_publish
     args = pr_publish_args.parse
 
-    odeprecated "`brew pr-publish --no-autosquash`" if args.no_autosquash?
+    odisabled "`brew pr-publish --no-autosquash`" if args.no_autosquash?
 
     tap = Tap.fetch(args.tap || CoreTap.instance.name)
     workflow = args.workflow || "publish-commit-bottles.yml"
@@ -63,6 +63,10 @@ module Homebrew
       if pr_labels.include?("autosquash")
         oh1 "Found `autosquash` label on ##{issue}. Requesting autosquash."
         inputs[:autosquash] = true
+      end
+      if pr_labels.include?("large-bottle-upload")
+        oh1 "Found `large-bottle-upload` label on ##{issue}. Requesting upload on large runner."
+        inputs[:large_runner] = true
       end
 
       if args.tap.present? && !T.must("#{user}/#{repo}".casecmp(tap.full_name)).zero?

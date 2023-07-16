@@ -44,6 +44,7 @@ module Homebrew
     args = generate_formula_api_args.parse
 
     tap = CoreTap.instance
+    raise TapUnavailableError, tap.name unless tap.installed?
 
     unless args.dry_run?
       directories = ["_data/formula", "api/formula", "formula"]
@@ -51,25 +52,29 @@ module Homebrew
       FileUtils.mkdir_p directories
     end
 
-    Formulary.enable_factory_cache!
-    Formula.generating_hash!
+    Homebrew.with_no_api_env do
+      File.write("api/formula_tap_migrations.json", JSON.dump(tap.tap_migrations)) unless args.dry_run?
 
-    tap.formula_names.each do |name|
-      formula = Formulary.factory(name)
-      name = formula.name
-      json = JSON.pretty_generate(formula.to_hash_with_variations)
+      Formulary.enable_factory_cache!
+      Formula.generating_hash!
 
-      unless args.dry_run?
-        File.write("_data/formula/#{name.tr("+", "_")}.json", "#{json}\n")
-        File.write("api/formula/#{name}.json", FORMULA_JSON_TEMPLATE)
-        File.write("formula/#{name}.html", html_template(name))
+      tap.formula_names.each do |name|
+        formula = Formulary.factory(name)
+        name = formula.name
+        json = JSON.pretty_generate(formula.to_hash_with_variations)
+
+        unless args.dry_run?
+          File.write("_data/formula/#{name.tr("+", "_")}.json", "#{json}\n")
+          File.write("api/formula/#{name}.json", FORMULA_JSON_TEMPLATE)
+          File.write("formula/#{name}.html", html_template(name))
+        end
+      rescue
+        onoe "Error while generating data for formula '#{name}'."
+        raise
       end
-    rescue
-      onoe "Error while generating data for formula '#{name}'."
-      raise
-    end
 
-    canonical_json = JSON.pretty_generate(tap.formula_renames.merge(tap.alias_table))
-    File.write("_data/formula_canonical.json", "#{canonical_json}\n") unless args.dry_run?
+      canonical_json = JSON.pretty_generate(tap.formula_renames.merge(tap.alias_table))
+      File.write("_data/formula_canonical.json", "#{canonical_json}\n") unless args.dry_run?
+    end
   end
 end

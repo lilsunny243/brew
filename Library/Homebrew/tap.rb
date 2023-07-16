@@ -25,6 +25,8 @@ class Tap
   HOMEBREW_TAP_STYLE_EXCEPTIONS_DIR = "style_exceptions"
   HOMEBREW_TAP_PYPI_FORMULA_MAPPINGS = "pypi_formula_mappings.json"
 
+  TAP_MIGRATIONS_STALE_SECONDS = 86400 # 1 day
+
   HOMEBREW_TAP_JSON_FILES = %W[
     #{HOMEBREW_TAP_FORMULA_RENAMES_FILE}
     #{HOMEBREW_TAP_CASK_RENAMES_FILE}
@@ -251,7 +253,9 @@ class Tap
   # @param quiet [Boolean] If set, suppress all output.
   # @param custom_remote [Boolean] If set, change the tap's remote if already installed.
   # @param verify [Boolean] If set, verify all the formula, casks and aliases in the tap are valid.
-  def install(quiet: false, clone_target: nil, force_auto_update: nil, custom_remote: false, verify: false)
+  # @param force [Boolean] If set, force core and cask taps to install even under API mode.
+  def install(quiet: false, clone_target: nil, force_auto_update: nil,
+              custom_remote: false, verify: false, force: false)
     require "descriptions"
     require "readall"
 
@@ -295,6 +299,10 @@ class Tap
       args << "-q" if quiet
       path.cd { safe_system "git", *args }
       return
+    elsif (core_tap? || name == "homebrew/cask") && !Homebrew::EnvConfig.no_install_from_api? && !force
+      # odeprecated: move to odie in the next minor release. This may break some CI so we should give notice.
+      opoo "Tapping #{name} is no longer typically necessary.\n" \
+           "Add #{Formatter.option("--force")} if you are sure you need one."
     end
 
     clear_cache
@@ -309,6 +317,8 @@ class Tap
 
     # Override user-set default template
     args << "--template="
+    # prevent fsmonitor from watching this repo
+    args << "--config" << "core.fsmonitor=false"
 
     begin
       safe_system "git", *args
@@ -498,11 +508,12 @@ class Tap
   sig { returns(T::Array[Pathname]) }
   def formula_files
     @formula_files ||= if formula_dir.directory?
-      # TODO: odeprecate the non-official/old logic with a new minor release somehow?
-      if official?
-        formula_dir.find
-      else
+      if formula_dir == path
+        # We only want the top level here so we don't treat commands & casks as formulae.
+        # Sharding is only supported in Formula/ and HomebrewFormula/.
         formula_dir.children
+      else
+        formula_dir.find
       end.select(&method(:formula_file?))
     else
       []
@@ -514,19 +525,17 @@ class Tap
   def self.formula_files_by_name(tap)
     cache_key = "formula_files_by_name_#{tap}"
     cache.fetch(cache_key) do |key|
-      cache[key] = tap.formula_files.each_with_object({}) do |file, hash|
-        # If there's more than one file with the same basename: intentionally
-        # ignore the later ones here.
-        hash[file.basename.to_s] ||= file
-      end
+      cache[key] = tap.formula_files_by_name
     end
   end
 
-  # An array of all versioned {Formula} files of this {Tap}.
-  sig { returns(T::Array[Pathname]) }
-  def versioned_formula_files
-    @versioned_formula_files ||= formula_files.select do |file|
-      file.basename(".rb").to_s =~ /@[\d.]+$/
+  # @private
+  sig { returns(T::Hash[String, Pathname]) }
+  def formula_files_by_name
+    formula_files.each_with_object({}) do |file, hash|
+      # If there's more than one file with the same basename: intentionally
+      # ignore the later ones here.
+      hash[file.basename.to_s] ||= file
     end
   end
 
@@ -534,12 +543,7 @@ class Tap
   sig { returns(T::Array[Pathname]) }
   def cask_files
     @cask_files ||= if cask_dir.directory?
-      # TODO: odeprecate the non-official/old logic with a new minor release somehow?
-      if official?
-        cask_dir.find
-      else
-        cask_dir.children
-      end.select(&method(:ruby_file?))
+      cask_dir.find.select(&method(:ruby_file?))
     else
       []
     end
@@ -714,7 +718,11 @@ class Tap
   # Hash with tap migrations.
   sig { returns(Hash) }
   def tap_migrations
-    @tap_migrations ||= if (migration_file = path/HOMEBREW_TAP_MIGRATIONS_FILE).file?
+    @tap_migrations ||= if name == "homebrew/cask" && !Homebrew::EnvConfig.no_install_from_api?
+      migrations, = Homebrew::API.fetch_json_api_file "cask_tap_migrations.jws.json",
+                                                      stale_seconds: TAP_MIGRATIONS_STALE_SECONDS
+      migrations
+    elsif (migration_file = path/HOMEBREW_TAP_MIGRATIONS_FILE).file?
       JSON.parse(migration_file.read)
     else
       {}
@@ -892,7 +900,8 @@ class CoreTap < Tap
   end
 
   # CoreTap never allows shallow clones (on request from GitHub).
-  def install(quiet: false, clone_target: nil, force_auto_update: nil, custom_remote: false, verify: false)
+  def install(quiet: false, clone_target: nil, force_auto_update: nil,
+              custom_remote: false, verify: false, force: false)
     remote = Homebrew::EnvConfig.core_git_remote # set by HOMEBREW_CORE_GIT_REMOTE
     requested_remote = clone_target || remote
 
@@ -903,7 +912,8 @@ class CoreTap < Tap
       $stderr.puts "HOMEBREW_CORE_GIT_REMOTE set: using #{remote} as the Homebrew/homebrew-core Git remote."
     end
 
-    super(quiet: quiet, clone_target: remote, force_auto_update: force_auto_update, custom_remote: custom_remote)
+    super(quiet: quiet, clone_target: remote, force_auto_update: force_auto_update,
+          custom_remote: custom_remote, force: force)
   end
 
   # @private
@@ -958,9 +968,13 @@ class CoreTap < Tap
   # @private
   sig { returns(Hash) }
   def tap_migrations
-    @tap_migrations ||= begin
+    @tap_migrations ||= if Homebrew::EnvConfig.no_install_from_api?
       self.class.ensure_installed!
       super
+    else
+      migrations, = Homebrew::API.fetch_json_api_file "formula_tap_migrations.jws.json",
+                                                      stale_seconds: TAP_MIGRATIONS_STALE_SECONDS
+      migrations
     end
   end
 
@@ -1012,11 +1026,40 @@ class CoreTap < Tap
   end
 
   # @private
+  sig { returns(T::Array[Pathname]) }
+  def formula_files
+    return super if Homebrew::EnvConfig.no_install_from_api? || installed?
+
+    raise TapUnavailableError, name
+  end
+
+  # @private
   sig { returns(T::Array[String]) }
   def formula_names
     return super if Homebrew::EnvConfig.no_install_from_api?
 
     Homebrew::API::Formula.all_formulae.keys
+  end
+
+  # @private
+  sig { returns(T::Hash[String, Pathname]) }
+  def formula_files_by_name
+    return super if Homebrew::EnvConfig.no_install_from_api?
+
+    formula_names.each_with_object({}) do |name, hash|
+      # If there's more than one file with the same basename: intentionally
+      # ignore the later ones here.
+      hash[name] ||= sharded_formula_path(name)
+    end
+  end
+
+  private
+
+  # @private
+  sig { params(name: String).returns(Pathname) }
+  def sharded_formula_path(name)
+    # TODO: add sharding logic.
+    formula_dir/"#{name}.rb"
   end
 end
 

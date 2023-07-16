@@ -96,7 +96,6 @@ module Homebrew
       arch:                       args.arch&.to_sym,
     )
       bottle_tag = if (bottle_tag = args.bottle_tag&.to_sym)
-        # TODO: odeprecate "--bottle-tag"
         Utils::Bottles::Tag.from_symbol(bottle_tag)
       else
         Utils::Bottles::Tag.new(system: os, arch: arch)

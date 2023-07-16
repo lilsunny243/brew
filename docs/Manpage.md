@@ -387,7 +387,7 @@ is already installed but outdated.
 
 ### `leaves` [`--installed-on-request`] [`--installed-as-dependency`]
 
-List installed formulae that are not dependencies of another installed formula.
+List installed formulae that are not dependencies of another installed formula or cask.
 
 * `-r`, `--installed-on-request`:
   Only list leaves that were manually installed.
@@ -537,6 +537,13 @@ Upgrades the database for the `postgresql` formula.
 
 Rerun the post-install steps for *`formula`*.
 
+### `pyenv-sync`
+
+Create symlinks for Homebrew's installed Python versions in ~/.pyenv/versions.
+
+Note that older patch version symlinks will be created and linked to the minor
+version so e.g. Python 3.11.0 will also be symlinked to 3.11.3.
+
 ### `rbenv-sync`
 
 Create symlinks for Homebrew's installed Ruby versions in ~/.rbenv/versions.
@@ -685,6 +692,8 @@ using protocols other than HTTPS, e.g. SSH, git, HTTP, FTP(S), rsync.
   List all pinned taps.
 * `--eval-all`:
   Evaluate all the formulae, casks and aliases in the new tap to check validity. Implied if `HOMEBREW_EVAL_ALL` is set.
+* `--force`:
+  Force install core taps even under API mode.
 
 ### `tap-info` [`--installed`] [`--json`] [*`tap`* ...]
 
@@ -2111,7 +2120,9 @@ example, run `export HOMEBREW_NO_INSECURE_REDIRECT=1` rather than just
   *Default:* macOS: `$HOME/Library/Caches/Homebrew`, Linux: `$XDG_CACHE_HOME/Homebrew` or `$HOME/.cache/Homebrew`.
 
 - `HOMEBREW_CASK_OPTS`
-  <br>Append these options to all `cask` commands. All `--*dir` options, `--language`, `--require-sha`, `--no-quarantine` and `--no-binaries` are supported. For example, you might add something like the following to your `~/.profile`, `~/.bash_profile`, or `~/.zshenv`:\n\n    `export HOMEBREW_CASK_OPTS="--appdir=~/Applications --fontdir=/Library/Fonts"`
+  <br>Append these options to all `cask` commands. All `--*dir` options, `--language`, `--require-sha`, `--no-quarantine` and `--no-binaries` are supported. For example, you might add something like the following to your `~/.profile`, `~/.bash_profile`, or `~/.zshenv`:
+
+    `export HOMEBREW_CASK_OPTS="--appdir=~/Applications --fontdir=/Library/Fonts"`
 
 - `HOMEBREW_CLEANUP_MAX_AGE_DAYS`
   <br>Cleanup all cached files older than this many days.
@@ -2378,7 +2389,7 @@ Homebrew's Project Leadership Committee is Colin Dean, Issy Long, Mike McQuaid, 
 
 Homebrew's Technical Steering Committee is Bo Anderson, FX Coudert, Michka Popoff, Mike McQuaid and Rylan Polster.
 
-Homebrew's maintainers are Alexander Bayandin, Bevan Kay, Bo Anderson, Branch Vincent, Caleb Xu, Carlo Cabrera, Daniel Nachun, David Baumgold, Dawid Dziurla, Dustin Rodrigues, Eric Knibbe, FX Coudert, George Adams, Issy Long, Markus Reiter, Miccal Matthews, Michael Cho, Michka Popoff, Mike McQuaid, Nanda H Krishna, Patrick Linnane, Razvan Azamfirei, Rui Chen, Ruoyu Zhong, Rylan Polster, Sam Ford, Sean Molenaar and Thierry Moisan.
+Homebrew's maintainers are Alexander Bayandin, Bevan Kay, Bo Anderson, Branch Vincent, Caleb Xu, Carlo Cabrera, Daniel Nachun, David Baumgold, Dawid Dziurla, Dustin Rodrigues, Eric Knibbe, FX Coudert, George Adams, Issy Long, Justin Krehel, Markus Reiter, Miccal Matthews, Michael Cho, Michka Popoff, Mike McQuaid, Nanda H Krishna, Patrick Linnane, Razvan Azamfirei, Rui Chen, Ruoyu Zhong, Rylan Polster, Sam Ford, Sean Molenaar and Thierry Moisan.
 
 Former maintainers with significant contributions include Misty De Méo, Shaun Jackman, Vítor Galvão, Claudia Pellegrino, Seeker, William Woodruff, Jan Viljanen, JCount, commitay, Dominyk Tiller, Tim Smith, Baptiste Fontaine, Xu Cheng, Martin Afanasjew, Brett Koonce, Charlie Sharpsteen, Jack Nagel, Adam Vandenberg, Andrew Janke, Alex Dunn, neutric, Tomasz Pajor, Uladzislau Shablinski, Alyssa Ross, ilovezfs, Chongyu Zhu and Homebrew's creator: Max Howell.
 

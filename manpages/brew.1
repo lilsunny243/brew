@@ -544,7 +544,7 @@ Skip installing cask dependencies\.
 For use with \fBbrew reinstall \-\-cask\fR\. Remove all files associated with a cask\. \fIMay remove files which are shared between applications\.\fR
 .
 .SS "\fBleaves\fR [\fB\-\-installed\-on\-request\fR] [\fB\-\-installed\-as\-dependency\fR]"
-List installed formulae that are not dependencies of another installed formula\.
+List installed formulae that are not dependencies of another installed formula or cask\.
 .
 .TP
 \fB\-r\fR, \fB\-\-installed\-on\-request\fR
@@ -748,6 +748,12 @@ Upgrades the database for the \fBpostgresql\fR formula\.
 .
 .SS "\fBpostinstall\fR \fIinstalled_formula\fR [\.\.\.]"
 Rerun the post\-install steps for \fIformula\fR\.
+.
+.SS "\fBpyenv\-sync\fR"
+Create symlinks for Homebrew\'s installed Python versions in ~/\.pyenv/versions\.
+.
+.P
+Note that older patch version symlinks will be created and linked to the minor version so e\.g\. Python 3\.11\.0 will also be symlinked to 3\.11\.3\.
 .
 .SS "\fBrbenv\-sync\fR"
 Create symlinks for Homebrew\'s installed Ruby versions in ~/\.rbenv/versions\.
@@ -966,6 +972,10 @@ List all pinned taps\.
 .TP
 \fB\-\-eval\-all\fR
 Evaluate all the formulae, casks and aliases in the new tap to check validity\. Implied if \fBHOMEBREW_EVAL_ALL\fR is set\.
+.
+.TP
+\fB\-\-force\fR
+Force install core taps even under API mode\.
 .
 .SS "\fBtap\-info\fR [\fB\-\-installed\fR] [\fB\-\-json\fR] [\fItap\fR \.\.\.]"
 Show detailed information about one or more \fItap\fRs\.
@@ -3039,7 +3049,10 @@ Use this directory as the download cache\.
 \fBHOMEBREW_CASK_OPTS\fR
 .
 .br
-Append these options to all \fBcask\fR commands\. All \fB\-\-*dir\fR options, \fB\-\-language\fR, \fB\-\-require\-sha\fR, \fB\-\-no\-quarantine\fR and \fB\-\-no\-binaries\fR are supported\. For example, you might add something like the following to your \fB~/\.profile\fR, \fB~/\.bash_profile\fR, or \fB~/\.zshenv\fR:\en\en \fBexport HOMEBREW_CASK_OPTS="\-\-appdir=~/Applications \-\-fontdir=/Library/Fonts"\fR
+Append these options to all \fBcask\fR commands\. All \fB\-\-*dir\fR options, \fB\-\-language\fR, \fB\-\-require\-sha\fR, \fB\-\-no\-quarantine\fR and \fB\-\-no\-binaries\fR are supported\. For example, you might add something like the following to your \fB~/\.profile\fR, \fB~/\.bash_profile\fR, or \fB~/\.zshenv\fR:
+.
+.IP
+\fBexport HOMEBREW_CASK_OPTS="\-\-appdir=~/Applications \-\-fontdir=/Library/Fonts"\fR
 .
 .TP
 \fBHOMEBREW_CLEANUP_MAX_AGE_DAYS\fR
@@ -3538,7 +3551,7 @@ Homebrew\'s Project Leadership Committee is Colin Dean, Issy Long, Mike McQuaid,
 Homebrew\'s Technical Steering Committee is Bo Anderson, FX Coudert, Michka Popoff, Mike McQuaid and Rylan Polster\.
 .
 .P
-Homebrew\'s maintainers are Alexander Bayandin, Bevan Kay, Bo Anderson, Branch Vincent, Caleb Xu, Carlo Cabrera, Daniel Nachun, David Baumgold, Dawid Dziurla, Dustin Rodrigues, Eric Knibbe, FX Coudert, George Adams, Issy Long, Markus Reiter, Miccal Matthews, Michael Cho, Michka Popoff, Mike McQuaid, Nanda H Krishna, Patrick Linnane, Razvan Azamfirei, Rui Chen, Ruoyu Zhong, Rylan Polster, Sam Ford, Sean Molenaar and Thierry Moisan\.
+Homebrew\'s maintainers are Alexander Bayandin, Bevan Kay, Bo Anderson, Branch Vincent, Caleb Xu, Carlo Cabrera, Daniel Nachun, David Baumgold, Dawid Dziurla, Dustin Rodrigues, Eric Knibbe, FX Coudert, George Adams, Issy Long, Justin Krehel, Markus Reiter, Miccal Matthews, Michael Cho, Michka Popoff, Mike McQuaid, Nanda H Krishna, Patrick Linnane, Razvan Azamfirei, Rui Chen, Ruoyu Zhong, Rylan Polster, Sam Ford, Sean Molenaar and Thierry Moisan\.
 .
 .P
 Former maintainers with significant contributions include Misty De Méo, Shaun Jackman, Vítor Galvão, Claudia Pellegrino, Seeker, William Woodruff, Jan Viljanen, JCount, commitay, Dominyk Tiller, Tim Smith, Baptiste Fontaine, Xu Cheng, Martin Afanasjew, Brett Koonce, Charlie Sharpsteen, Jack Nagel, Adam Vandenberg, Andrew Janke, Alex Dunn, neutric, Tomasz Pajor, Uladzislau Shablinski, Alyssa Ross, ilovezfs, Chongyu Zhu and Homebrew\'s creator: Max Howell\.

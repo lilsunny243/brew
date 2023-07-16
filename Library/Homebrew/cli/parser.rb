@@ -138,6 +138,7 @@ module Homebrew
         @named_args_type = nil
         @max_named_args = nil
         @min_named_args = nil
+        @named_args_without_api = false
         @description = nil
         @usage_banner = nil
         @hide_from_man_page = false
@@ -165,6 +166,7 @@ module Homebrew
           description += " (disabled#{"; replaced by #{replacement}" if replacement.present?})"
         end
         @parser.public_send(method, *names, *wrap_option_desc(description)) do |value|
+          # This odeprecated should stick around indefinitely.
           odeprecated "the `#{names.first}` switch", replacement, disable: disable if !replacement.nil? || disable
           value = true if names.none? { |name| name.start_with?("--[no-]") }
 
@@ -223,6 +225,7 @@ module Homebrew
           description += " (disabled#{"; replaced by #{replacement}" if replacement.present?})"
         end
         @parser.on(*names, *wrap_option_desc(description), required) do |option_value|
+          # This odisabled should stick around indefinitely.
           odisabled "the `#{names.first}` flag", replacement unless replacement.nil?
           names.each do |name|
             @args[option_to_name(name)] = option_value
@@ -346,7 +349,7 @@ module Homebrew
           check_named_args(named_args)
         end
 
-        @args.freeze_named_args!(named_args, cask_options: @cask_options)
+        @args.freeze_named_args!(named_args, cask_options: @cask_options, without_api: @named_args_without_api)
         @args.freeze_remaining_args!(non_options.empty? ? remaining : [*remaining, "--", non_options])
         @args.freeze_processed_options!(@processed_options)
         @args.freeze
@@ -392,13 +395,14 @@ module Homebrew
 
       sig {
         params(
-          type:   T.any(NilClass, Symbol, T::Array[String], T::Array[Symbol]),
-          number: T.nilable(Integer),
-          min:    T.nilable(Integer),
-          max:    T.nilable(Integer),
+          type:        T.any(NilClass, Symbol, T::Array[String], T::Array[Symbol]),
+          number:      T.nilable(Integer),
+          min:         T.nilable(Integer),
+          max:         T.nilable(Integer),
+          without_api: T::Boolean,
         ).void
       }
-      def named_args(type = nil, number: nil, min: nil, max: nil)
+      def named_args(type = nil, number: nil, min: nil, max: nil, without_api: false)
         if number.present? && (min.present? || max.present?)
           raise ArgumentError, "Do not specify both `number` and `min` or `max`"
         end
@@ -417,6 +421,8 @@ module Homebrew
           @min_named_args = min
           @max_named_args = max
         end
+
+        @named_args_without_api = without_api
       end
 
       sig { void }
