@@ -441,6 +441,7 @@ _brew_bump() {
       --formula
       --full-name
       --help
+      --installed
       --limit
       --no-pull-requests
       --open-pr
@@ -472,12 +473,13 @@ _brew_bump_cask_pr() {
       --no-browse
       --no-fork
       --no-style
-      --online
       --quiet
       --sha256
       --url
       --verbose
       --version
+      --version-arm
+      --version-intel
       --write-only
       "
       return
@@ -925,6 +927,7 @@ _brew_edit() {
   esac
   __brew_complete_formulae
   __brew_complete_casks
+  __brew_complete_tapped
 }
 
 _brew_environment() {
@@ -1284,6 +1287,7 @@ _brew_install_bundler_gems() {
   case "${cur}" in
     -*)
       __brewcomp "
+      --add-groups
       --debug
       --groups
       --help
@@ -1633,6 +1637,23 @@ _brew_outdated() {
 }
 
 _brew_pin() {
+  local cur="${COMP_WORDS[COMP_CWORD]}"
+  case "${cur}" in
+    -*)
+      __brewcomp "
+      --debug
+      --help
+      --quiet
+      --verbose
+      "
+      return
+      ;;
+    *) ;;
+  esac
+  __brew_complete_installed_formulae
+}
+
+_brew_post_install() {
   local cur="${COMP_WORDS[COMP_CWORD]}"
   case "${cur}" in
     -*)
@@ -2084,7 +2105,6 @@ _brew_tap() {
       --force
       --force-auto-update
       --help
-      --list-pinned
       --no-force-auto-update
       --quiet
       --repair
@@ -2190,6 +2210,7 @@ _brew_tests() {
       --changed
       --coverage
       --debug
+      --fail-fast
       --generic
       --help
       --online
@@ -2712,6 +2733,7 @@ _brew() {
     options) _brew_options ;;
     outdated) _brew_outdated ;;
     pin) _brew_pin ;;
+    post_install) _brew_post_install ;;
     postgresql-upgrade-database) _brew_postgresql_upgrade_database ;;
     postinstall) _brew_postinstall ;;
     pr-automerge) _brew_pr_automerge ;;

@@ -67,8 +67,8 @@ module Homebrew::EnvConfig
   sig { returns(T::Boolean) }
   def self.curl_verbose?; end
 
-  sig { returns(T::Boolean) }
-  def self.curlrc?; end
+  sig { returns(T.nilable(String)) }
+  def self.curlrc; end
 
   sig { returns(T::Boolean) }
   def self.debug?; end
@@ -193,6 +193,9 @@ module Homebrew::EnvConfig
   sig { returns(T.nilable(String)) }
   def self.no_proxy; end
 
+  sig { returns(T::Boolean) }
+  def self.no_update_report_new?; end
+
   sig { returns(T.nilable(String)) }
   def self.pip_index_url; end
 
@@ -216,6 +219,9 @@ module Homebrew::EnvConfig
 
   sig { returns(T.nilable(String)) }
   def self.svn; end
+
+  sig { returns(T::Boolean) }
+  def self.system_env_takes_priority?; end
 
   sig { returns(String) }
   def self.temp; end

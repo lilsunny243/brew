@@ -12,7 +12,6 @@ module Homebrew
       usage_banner "`tap` [<options>] [<user>`/`<repo>] [<URL>]"
       description <<~EOS
         Tap a formula repository.
-
         If no arguments are provided, list all installed taps.
 
         With <URL> unspecified, tap a formula repository from GitHub using HTTPS.
@@ -41,8 +40,6 @@ module Homebrew
              description: "Install or change a tap with a custom remote. Useful for mirrors."
       switch "--repair",
              description: "Migrate tapped formulae from symlink-based to directory-based structure."
-      switch "--list-pinned",
-             description: "List all pinned taps."
       switch "--eval-all",
              description: "Evaluate all the formulae, casks and aliases in the new tap to check validity. " \
                           "Implied if `HOMEBREW_EVAL_ALL` is set."
@@ -60,8 +57,6 @@ module Homebrew
     if args.repair?
       Tap.each(&:link_completions_and_manpages)
       Tap.each(&:fix_remote_configuration)
-    elsif args.list_pinned?
-      puts Tap.select(&:pinned?).map(&:name)
     elsif args.no_named?
       puts Tap.names
     else

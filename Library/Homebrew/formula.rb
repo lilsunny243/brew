@@ -59,7 +59,6 @@ require "extend/api_hashable"
 # end</pre>
 class Formula
   include FileUtils
-  include Utils::Inreplace
   include Utils::Shebang
   include Utils::Shell
   include Context
@@ -72,39 +71,47 @@ class Formula
 
   # The name of this {Formula}.
   # e.g. `this-formula`
+  sig { returns(String) }
   attr_reader :name
 
   # The path to the alias that was used to identify this {Formula}.
   # e.g. `/usr/local/Library/Taps/homebrew/homebrew-core/Aliases/another-name-for-this-formula`
+  sig { returns(T.any(NilClass, Pathname, String)) }
   attr_reader :alias_path
 
   # The name of the alias that was used to identify this {Formula}.
   # e.g. `another-name-for-this-formula`
+  sig { returns(T.nilable(String)) }
   attr_reader :alias_name
 
   # The fully-qualified name of this {Formula}.
-  # For core formula it's the same as {#name}.
+  # For core formulae it's the same as {#name}.
   # e.g. `homebrew/tap-name/this-formula`
+  sig { returns(String) }
   attr_reader :full_name
 
   # The fully-qualified alias referring to this {Formula}.
-  # For core formula it's the same as {#alias_name}.
+  # For core formulae it's the same as {#alias_name}.
   # e.g. `homebrew/tap-name/another-name-for-this-formula`
+  sig { returns(T.nilable(String)) }
   attr_reader :full_alias_name
 
   # The full path to this {Formula}.
-  # e.g. `/usr/local/Library/Taps/homebrew/homebrew-core/Formula/this-formula.rb`
+  # e.g. `/usr/local/Library/Taps/homebrew/homebrew-core/Formula/t/this-formula.rb`
+  sig { returns(Pathname) }
   attr_reader :path
 
   # The {Tap} instance associated with this {Formula}.
   # If it's `nil`, then this formula is loaded from a path or URL.
   # @private
+  sig { returns(T.nilable(Tap)) }
   attr_reader :tap
 
   # The stable (and default) {SoftwareSpec} for this {Formula}.
   # This contains all the attributes (e.g. URL, checksum) that apply to the
   # stable version of this formula.
   # @private
+  sig { returns(T.nilable(SoftwareSpec)) }
   attr_reader :stable
 
   # The HEAD {SoftwareSpec} for this {Formula}.
@@ -114,6 +121,7 @@ class Formula
   # `nil` if there is no HEAD version.
   # @see #stable
   # @private
+  sig { returns(T.nilable(SoftwareSpec)) }
   attr_reader :head
 
   # The currently active {SoftwareSpec}.
@@ -127,60 +135,72 @@ class Formula
   # It's either :stable or :head
   # @see #active_spec
   # @private
+  sig { returns(Symbol) }
   attr_reader :active_spec_sym
 
   # most recent modified time for source files
   # @private
+  sig { returns(T.nilable(Time)) }
   attr_reader :source_modified_time
 
   # Used for creating new Homebrew versions of software without new upstream
   # versions.
   # @see .revision=
+  sig { returns(Integer) }
   attr_reader :revision
 
   # Used to change version schemes for packages.
   # @see .version_scheme=
+  sig { returns(Integer) }
   attr_reader :version_scheme
 
   # The current working directory during builds.
   # Will only be non-`nil` inside {#install}.
+  sig { returns(T.nilable(Pathname)) }
   attr_reader :buildpath
 
   # The current working directory during tests.
   # Will only be non-`nil` inside {.test}.
+  sig { returns(T.nilable(Pathname)) }
   attr_reader :testpath
 
   # When installing a bottle (binary package) from a local path this will be
   # set to the full path to the bottle tarball. If not, it will be `nil`.
   # @private
+  sig { returns(T.nilable(Pathname)) }
   attr_accessor :local_bottle_path
 
   # When performing a build, test, or other loggable action, indicates which
   # log file location to use.
   # @private
+  sig { returns(T.nilable(String)) }
   attr_reader :active_log_type
 
-  # The {BuildOptions} for this {Formula}. Lists the arguments passed and any
-  # {.option}s in the {Formula}. Note that these may differ at different times
-  # during the installation of a {Formula}. This is annoying but the result of
-  # state that we're trying to eliminate.
-  # @return [BuildOptions]
+  # The {BuildOptions} or {Tab} for this {Formula}. Lists the arguments passed
+  # and any {.option}s in the {Formula}. Note that these may differ at
+  # different times during the installation of a {Formula}. This is annoying
+  # but the result of state that we're trying to eliminate.
+  sig { returns(T.any(BuildOptions, Tab)) }
   attr_reader :build
 
   # Whether this formula should be considered outdated
   # if the target of the alias it was installed with has since changed.
   # Defaults to true.
-  # @return [Boolean]
+  sig { returns(T::Boolean) }
   attr_accessor :follow_installed_alias
 
   alias follow_installed_alias? follow_installed_alias
 
   # Whether or not to force the use of a bottle.
-  # @return [Boolean]
   # @private
+  sig { returns(T::Boolean) }
   attr_accessor :force_bottle
 
   # @private
+  sig {
+    params(name: String, path: Pathname, spec: Symbol, alias_path: T.any(NilClass, Pathname, String),
+           tap: T.nilable(Tap), force_bottle: T::Boolean).void
+  }
   def initialize(name, path, spec, alias_path: nil, tap: nil, force_bottle: false)
     # Only allow instances of subclasses. The base class does not hold any spec information (URLs etc).
     raise "Do not call `Formula.new' directly without a subclass." unless self.class < Formula
@@ -304,7 +324,8 @@ class Formula
   # Can differ from {#alias_path}, which is the alias used to find the formula,
   # and is specified to this instance.
   def installed_alias_path
-    path = build.source["path"] if build.is_a?(Tab)
+    build_tab = build
+    path = build_tab.source["path"] if build_tab.is_a?(Tab)
     return unless path&.match?(%r{#{HOMEBREW_TAP_DIR_REGEX}/Aliases}o)
     return unless File.symlink?(path)
 
@@ -353,20 +374,23 @@ class Formula
 
   # Is the currently active {SoftwareSpec} a {#stable} build?
   # @private
+  sig { returns(T::Boolean) }
   def stable?
     active_spec == stable
   end
 
   # Is the currently active {SoftwareSpec} a {#head} build?
   # @private
+  sig { returns(T::Boolean) }
   def head?
     active_spec == head
   end
 
   # Is this formula HEAD-only?
   # @private
+  sig { returns(T::Boolean) }
   def head_only?
-    head && !stable
+    !!head && !stable
   end
 
   delegate [ # rubocop:disable Layout/HashAlignment
@@ -434,10 +458,13 @@ class Formula
   # @see .loaded_from_api?
   delegate loaded_from_api?: :"self.class"
 
+  sig { void }
   def update_head_version
     return unless head?
-    return unless head.downloader.is_a?(VCSDownloadStrategy)
-    return unless head.downloader.cached_location.exist?
+
+    head_spec = T.must(head)
+    return unless head_spec.downloader.is_a?(VCSDownloadStrategy)
+    return unless head_spec.downloader.cached_location.exist?
 
     path = if ENV["HOMEBREW_ENV"]
       ENV.fetch("PATH")
@@ -446,7 +473,7 @@ class Formula
     end
 
     with_env(PATH: path) do
-      head.version.update_commit(head.downloader.last_commit)
+      head_spec.version.update_commit(head_spec.downloader.last_commit)
     end
   end
 
@@ -467,12 +494,14 @@ class Formula
   def versioned_formulae_names
     versioned_names = if tap
       name_prefix = "#{name.gsub(/(@[\d.]+)?$/, "")}@"
-      tap.formula_names.select do |name|
+      T.must(tap).formula_names.select do |name|
         name.start_with?(name_prefix)
       end
     elsif path.exist?
       Pathname.glob(path.to_s.gsub(/(@[\d.]+)?\.rb$/, "@*.rb"))
               .map { |path| path.basename(".rb").to_s }
+    else
+      raise "Either tap or path is required to list versioned formulae"
     end.sort
 
     versioned_names.reject do |versioned_name|
@@ -498,26 +527,29 @@ class Formula
   delegate resource: :active_spec
 
   # An old name for the formula.
-  # @deprecated Use #{#oldnames} instead.
+  # @deprecated Use {#oldnames} instead.
+  sig { returns(T.nilable(String)) }
   def oldname
     odeprecated "Formula#oldname", "Formula#oldnames"
     @oldname ||= oldnames.first
   end
 
   # Old names for the formula.
+  sig { returns(T::Array[String]) }
   def oldnames
     @oldnames ||= if tap
-      tap.formula_renames
-         .flat_map { |old_name, new_name| (new_name == name) ? old_name : [] }
+      T.must(tap).formula_renames
+       .flat_map { |old_name, new_name| (new_name == name) ? old_name : [] }
     else
       []
     end
   end
 
   # All aliases for the formula.
+  sig { returns(T::Array[String]) }
   def aliases
     @aliases ||= if tap
-      tap.alias_reverse_table[full_name].to_a.map do |a|
+      T.must(tap).alias_reverse_table[full_name].to_a.map do |a|
         a.split("/").last
       end
     else
@@ -573,12 +605,14 @@ class Formula
   # This is actually just a check for if the {#latest_installed_prefix} directory
   # exists and is not empty.
   # @private
+  sig { returns(T::Boolean) }
   def latest_version_installed?
     (dir = latest_installed_prefix).directory? && !dir.children.empty?
   end
 
   # If at least one version of {Formula} is installed.
   # @private
+  sig { returns(T::Boolean) }
   def any_version_installed?
     installed_prefixes.any? { |keg| (keg/Tab::FILENAME).file? }
   end
@@ -614,11 +648,11 @@ class Formula
     tab = Tab.for_keg(prefix(version))
 
     return true if tab.version_scheme < version_scheme
-    return true if stable && tab.stable_version && tab.stable_version < stable.version
+    return true if stable && tab.stable_version && tab.stable_version < T.must(stable).version
     return false unless fetch_head
     return false unless head&.downloader.is_a?(VCSDownloadStrategy)
 
-    downloader = head.downloader
+    downloader = T.must(head).downloader
 
     with_context quiet: true do
       downloader.commit_outdated?(version.version.commit)
@@ -630,7 +664,7 @@ class Formula
   def latest_installed_prefix
     if head && (head_version = latest_head_version) && !head_version_outdated?(head_version)
       latest_head_prefix
-    elsif stable && (stable_prefix = prefix(PkgVersion.new(stable.version, revision))).directory?
+    elsif stable && (stable_prefix = prefix(PkgVersion.new(T.must(stable).version, revision))).directory?
       stable_prefix
     else
       prefix
@@ -638,7 +672,7 @@ class Formula
   end
 
   # The directory in the cellar that the formula is installed to.
-  # This directory points to {#opt_prefix} if it exists and if #{prefix} is not
+  # This directory points to {#opt_prefix} if it exists and if {#prefix} is not
   # called from within the same formula's {#install} or {#post_install} methods.
   # Otherwise, return the full path to the formula's versioned cellar.
   def prefix(version = pkg_version)
@@ -652,11 +686,13 @@ class Formula
   end
 
   # Is the formula linked?
+  sig { returns(T::Boolean) }
   def linked?
     linked_keg.symlink?
   end
 
   # Is the formula linked to `opt`?
+  sig { returns(T::Boolean) }
   def optlinked?
     opt_prefix.symlink?
   end
@@ -708,6 +744,7 @@ class Formula
   #
   # No `make install` available?
   # <pre>bin.install "binary1"</pre>
+  sig { returns(Pathname) }
   def bin
     prefix/"bin"
   end
@@ -715,6 +752,7 @@ class Formula
   # The directory where the formula's documentation should be installed.
   # This is symlinked into `HOMEBREW_PREFIX` after installation or with
   # `brew link` for formulae that are not keg-only.
+  sig { returns(Pathname) }
   def doc
     share/"doc"/name
   end
@@ -725,6 +763,7 @@ class Formula
   #
   # No `make install` available?
   # <pre>include.install "example.h"</pre>
+  sig { returns(Pathname) }
   def include
     prefix/"include"
   end
@@ -732,6 +771,7 @@ class Formula
   # The directory where the formula's info files should be installed.
   # This is symlinked into `HOMEBREW_PREFIX` after installation or with
   # `brew link` for formulae that are not keg-only.
+  sig { returns(Pathname) }
   def info
     share/"info"
   end
@@ -742,6 +782,7 @@ class Formula
   #
   # No `make install` available?
   # <pre>lib.install "example.dylib"</pre>
+  sig { returns(Pathname) }
   def lib
     prefix/"lib"
   end
@@ -754,6 +795,7 @@ class Formula
   # <pre>libexec.install "foo.jar"
   # bin.write_jar_script libexec/"foo.jar", "foo"
   # </pre>
+  sig { returns(Pathname) }
   def libexec
     prefix/"libexec"
   end
@@ -763,6 +805,7 @@ class Formula
   # `brew link` for formulae that are not keg-only.
   # Often one of the more specific `man` functions should be used instead,
   # e.g. {#man1}.
+  sig { returns(Pathname) }
   def man
     share/"man"
   end
@@ -773,6 +816,7 @@ class Formula
   #
   # No `make install` available?
   # <pre>man1.install "example.1"</pre>
+  sig { returns(Pathname) }
   def man1
     man/"man1"
   end
@@ -780,6 +824,7 @@ class Formula
   # The directory where the formula's man2 pages should be installed.
   # This is symlinked into `HOMEBREW_PREFIX` after installation or with
   # `brew link` for formulae that are not keg-only.
+  sig { returns(Pathname) }
   def man2
     man/"man2"
   end
@@ -790,6 +835,7 @@ class Formula
   #
   # No `make install` available?
   # <pre>man3.install "man.3"</pre>
+  sig { returns(Pathname) }
   def man3
     man/"man3"
   end
@@ -797,6 +843,7 @@ class Formula
   # The directory where the formula's man4 pages should be installed.
   # This is symlinked into `HOMEBREW_PREFIX` after installation or with
   # `brew link` for formulae that are not keg-only.
+  sig { returns(Pathname) }
   def man4
     man/"man4"
   end
@@ -804,6 +851,7 @@ class Formula
   # The directory where the formula's man5 pages should be installed.
   # This is symlinked into `HOMEBREW_PREFIX` after installation or with
   # `brew link` for formulae that are not keg-only.
+  sig { returns(Pathname) }
   def man5
     man/"man5"
   end
@@ -811,6 +859,7 @@ class Formula
   # The directory where the formula's man6 pages should be installed.
   # This is symlinked into `HOMEBREW_PREFIX` after installation or with
   # `brew link` for formulae that are not keg-only.
+  sig { returns(Pathname) }
   def man6
     man/"man6"
   end
@@ -818,6 +867,7 @@ class Formula
   # The directory where the formula's man7 pages should be installed.
   # This is symlinked into `HOMEBREW_PREFIX` after installation or with
   # `brew link` for formulae that are not keg-only.
+  sig { returns(Pathname) }
   def man7
     man/"man7"
   end
@@ -825,6 +875,7 @@ class Formula
   # The directory where the formula's man8 pages should be installed.
   # This is symlinked into `HOMEBREW_PREFIX` after installation or with
   # `brew link` for formulae that are not keg-only.
+  sig { returns(Pathname) }
   def man8
     man/"man8"
   end
@@ -833,6 +884,7 @@ class Formula
   # This is symlinked into `HOMEBREW_PREFIX` after installation or with
   # `brew link` for formulae that are not keg-only.
   # Generally we try to migrate these to {#bin} instead.
+  sig { returns(Pathname) }
   def sbin
     prefix/"sbin"
   end
@@ -852,6 +904,7 @@ class Formula
   #
   # Install `./example_code/simple/ones` to `share/demos/examples`:
   # <pre>(share/"demos").install "example_code/simple/ones" => "examples"</pre>
+  sig { returns(Pathname) }
   def share
     prefix/"share"
   end
@@ -863,6 +916,7 @@ class Formula
   #
   # No `make install` available?
   # <pre>pkgshare.install "examples"</pre>
+  sig { returns(Pathname) }
   def pkgshare
     prefix/"share"/name
   end
@@ -872,6 +926,7 @@ class Formula
   #
   # To install an Emacs mode included with a software package:
   # <pre>elisp.install "contrib/emacs/example-mode.el"</pre>
+  sig { returns(Pathname) }
   def elisp
     prefix/"share/emacs/site-lisp"/name
   end
@@ -880,6 +935,7 @@ class Formula
   # This is symlinked into `HOMEBREW_PREFIX` after installation or with
   # `brew link` for formulae that are not keg-only.
   # This is not symlinked into `HOMEBREW_PREFIX`.
+  sig { returns(Pathname) }
   def frameworks
     prefix/"Frameworks"
   end
@@ -888,6 +944,7 @@ class Formula
   # This is symlinked into `HOMEBREW_PREFIX` after installation or with
   # `brew link` for formulae that are not keg-only.
   # This is not symlinked into `HOMEBREW_PREFIX`.
+  sig { returns(Pathname) }
   def kext_prefix
     prefix/"Library/Extensions"
   end
@@ -897,6 +954,7 @@ class Formula
   # but will write a new file named `*.default`.
   # This directory is not inside the `HOMEBREW_CELLAR` so it persists
   # across upgrades.
+  sig { returns(Pathname) }
   def etc
     (HOMEBREW_PREFIX/"etc").extend(InstallRenamed)
   end
@@ -905,6 +963,7 @@ class Formula
   # e.g. `$HOMEBREW_PREFIX/etc/openssl@1.1`
   # Anything using `pkgetc.install` will not overwrite other files on
   # e.g. upgrades but will write a new file named `*.default`.
+  sig { returns(Pathname) }
   def pkgetc
     (HOMEBREW_PREFIX/"etc"/name).extend(InstallRenamed)
   end
@@ -912,6 +971,7 @@ class Formula
   # The directory where the formula's variable files should be installed.
   # This directory is not inside the `HOMEBREW_CELLAR` so it persists
   # across upgrades.
+  sig { returns(Pathname) }
   def var
     HOMEBREW_PREFIX/"var"
   end
@@ -920,6 +980,7 @@ class Formula
   # installed.
   # This is symlinked into `HOMEBREW_PREFIX` after installation or with
   # `brew link` for formulae that are not keg-only.
+  sig { returns(Pathname) }
   def zsh_function
     share/"zsh/site-functions"
   end
@@ -928,6 +989,7 @@ class Formula
   # installed.
   # This is symlinked into `HOMEBREW_PREFIX` after installation or with
   # `brew link` for formulae that are not keg-only.
+  sig { returns(Pathname) }
   def fish_function
     share/"fish/vendor_functions.d"
   end
@@ -936,6 +998,7 @@ class Formula
   # installed.
   # This is symlinked into `HOMEBREW_PREFIX` after installation or with
   # `brew link` for formulae that are not keg-only.
+  sig { returns(Pathname) }
   def bash_completion
     prefix/"etc/bash_completion.d"
   end
@@ -944,6 +1007,7 @@ class Formula
   # installed.
   # This is symlinked into `HOMEBREW_PREFIX` after installation or with
   # `brew link` for formulae that are not keg-only.
+  sig { returns(Pathname) }
   def zsh_completion
     share/"zsh/site-functions"
   end
@@ -952,6 +1016,7 @@ class Formula
   # installed.
   # This is symlinked into `HOMEBREW_PREFIX` after installation or with
   # `brew link` for formulae that are not keg-only.
+  sig { returns(Pathname) }
   def fish_completion
     share/"fish/vendor_completions.d"
   end
@@ -960,12 +1025,14 @@ class Formula
   # installation so, despite not being in `HOMEBREW_CELLAR`, they are installed
   # there after pouring a bottle.
   # @private
+  sig { returns(Pathname) }
   def bottle_prefix
     prefix/".bottle"
   end
 
   # The directory where the formula's installation or test logs will be written.
   # @private
+  sig { returns(Pathname) }
   def logs
     HOMEBREW_LOGS + name
   end
@@ -1220,6 +1287,7 @@ class Formula
   # Rarely, you don't want your library symlinked into the main prefix.
   # See `gettext.rb` for an example.
   # @see .keg_only
+  sig { returns(T::Boolean) }
   def keg_only?
     return false unless keg_only_reason
 
@@ -1395,6 +1463,7 @@ class Formula
   end
 
   # @private
+  sig { returns(T::Array[String]) }
   def oldnames_to_migrate
     oldnames.select do |oldname|
       old_rack = HOMEBREW_CELLAR/oldname
@@ -1405,6 +1474,7 @@ class Formula
     end
   end
 
+  sig { returns(T::Boolean) }
   def migration_needed?
     !oldnames_to_migrate.empty? && !rack.exist?
   end
@@ -1446,16 +1516,18 @@ class Formula
     end
   end
 
+  sig { returns(T::Boolean) }
   def new_formula_available?
     installed_alias_target_changed? && !latest_formula.latest_version_installed?
   end
 
   def current_installed_alias_target
-    Formulary.factory(installed_alias_name) if installed_alias_path
+    Formulary.factory(T.must(installed_alias_name)) if installed_alias_path
   end
 
   # Has the target of the alias used to install this formula changed?
   # Returns false if the formula wasn't installed with an alias.
+  sig { returns(T::Boolean) }
   def installed_alias_target_changed?
     target = current_installed_alias_target
     return false unless target
@@ -1464,12 +1536,14 @@ class Formula
   end
 
   # Is this formula the target of an alias used to install an old formula?
+  sig { returns(T::Boolean) }
   def supersedes_an_installed_formula?
     old_installed_formulae.any?
   end
 
   # Has the alias used to install the formula changed, or are different
   # formulae already installed with this alias?
+  sig { returns(T::Boolean) }
   def alias_changed?
     installed_alias_target_changed? || supersedes_an_installed_formula?
   end
@@ -1490,6 +1564,7 @@ class Formula
   end
 
   # @private
+  sig { params(fetch_head: T::Boolean).returns(T::Boolean) }
   def outdated?(fetch_head: false)
     !outdated_kegs(fetch_head: fetch_head).empty?
   rescue Migrator::MigrationNeededError
@@ -1553,9 +1628,11 @@ class Formula
   end
 
   # Standard parameters for cargo builds.
-  sig { params(root: T.any(String, Pathname), path: String).returns(T::Array[T.any(String, Pathname)]) }
+  sig {
+    params(root: T.any(String, Pathname), path: T.any(String, Pathname)).returns(T::Array[String])
+  }
   def std_cargo_args(root: prefix, path: ".")
-    ["--locked", "--root", root, "--path", path]
+    ["--locked", "--root=#{root}", "--path=#{path}"]
   end
 
   # Standard parameters for CMake builds.
@@ -1566,7 +1643,7 @@ class Formula
   sig {
     params(
       install_prefix: T.any(String, Pathname),
-      install_libdir: String,
+      install_libdir: T.any(String, Pathname),
       find_framework: String,
     ).returns(T::Array[String])
   }
@@ -1622,6 +1699,18 @@ class Formula
     ["--prefix=#{prefix}", "--libdir=#{lib}", "--buildtype=release", "--wrap-mode=nofallback"]
   end
 
+  # Standard parameters for pip builds.
+  sig {
+    params(prefix:          T.any(String, Pathname, FalseClass),
+           build_isolation: T::Boolean).returns(T::Array[String])
+  }
+  def std_pip_args(prefix: self.prefix, build_isolation: false)
+    args = ["--verbose", "--no-deps", "--no-binary=:all:", "--ignore-installed", "--no-compile"]
+    args << "--prefix=#{prefix}" if prefix
+    args << "--no-build-isolation" unless build_isolation
+    args
+  end
+
   # Shared library names according to platform conventions.
   #
   # Optionally specify a `version` to restrict the shared library to a specific
@@ -1629,8 +1718,7 @@ class Formula
   #
   # If `name` is specified as "*", match any shared library of any version.
   #
-  # <pre>
-  # shared_library("foo")      #=> foo.dylib
+  # <pre>shared_library("foo")      #=> foo.dylib
   # shared_library("foo", 1)   #=> foo.1.dylib
   # shared_library("foo", "*") #=> foo.2.dylib, foo.1.dylib, foo.dylib
   # shared_library("*")        #=> foo.dylib, bar.dylib
@@ -1652,8 +1740,7 @@ class Formula
   # Optionally specify a `source` or `target` depending on the location
   # of the file containing the RPATH command and where its target is located.
   #
-  # <pre>
-  # rpath #=> "@loader_path/../lib"
+  # <pre>rpath #=> "@loader_path/../lib"
   # rpath(target: frameworks) #=> "@loader_path/../Frameworks"
   # rpath(source: libexec/"bin") #=> "@loader_path/../../lib"
   # </pre>
@@ -1719,64 +1806,62 @@ class Formula
   # Generate shell completions for a formula for bash, zsh, and fish, using the formula's executable.
   #
   # @param commands [Pathname, String] the path to the executable and any passed subcommand(s)
-  # to use for generating the completion scripts.
+  #  to use for generating the completion scripts.
   # @param base_name [String] the base name of the generated completion script. Defaults to the formula name.
   # @param shells [Array<Symbol>] the shells to generate completion scripts for. Defaults to `[:bash, :zsh, :fish]`.
   # @param shell_parameter_format [String, Symbol] specify how `shells` should each be passed
-  # to the `executable`. Takes either a String representing a prefix, or one of [:flag, :arg, :none, :click].
-  # Defaults to plainly passing the shell.
+  #  to the `executable`. Takes either a String representing a prefix, or one of `[:flag, :arg, :none, :click]`.
+  #  Defaults to plainly passing the shell.
   #
   # @example Using default values for optional arguments
   #   generate_completions_from_executable(bin/"foo", "completions")
-  # translates to
   #
-  # (bash_completion/"foo").write Utils.safe_popen_read({ "SHELL" => "bash" }, bin/"foo", "completions", "bash")
+  #   # translates to
+  #   (bash_completion/"foo").write Utils.safe_popen_read({ "SHELL" => "bash" }, bin/"foo", "completions", "bash")
+  #   (zsh_completion/"_foo").write Utils.safe_popen_read({ "SHELL" => "zsh" }, bin/"foo", "completions", "zsh")
+  #   (fish_completion/"foo.fish").write Utils.safe_popen_read({ "SHELL" => "fish" }, bin/"foo",
+  #                                                            "completions", "fish")
   #
-  # (zsh_completion/"_foo").write Utils.safe_popen_read({ "SHELL" => "zsh" }, bin/"foo", "completions", "zsh")
+  # @example Selecting shells and using a different `base_name`
+  #   generate_completions_from_executable(bin/"foo", "completions", shells: [:bash, :zsh], base_name: "bar")
   #
-  # (fish_completion/"foo.fish").write Utils.safe_popen_read({ "SHELL" => "fish" }, bin/"foo", "completions", "fish")
+  #   # translates to
+  #   (bash_completion/"bar").write Utils.safe_popen_read({ "SHELL" => "bash" }, bin/"foo", "completions", "bash")
+  #   (zsh_completion/"_bar").write Utils.safe_popen_read({ "SHELL" => "zsh" }, bin/"foo", "completions", "zsh")
   #
-  # @example Selecting shells and using a different base_name
-  #    generate_completions_from_executable(bin/"foo", "completions", shells: [:bash, :zsh], base_name: "bar")
-  # translates to
-  #
-  # (bash_completion/"bar").write Utils.safe_popen_read({ "SHELL" => "bash" }, bin/"foo", "completions", "bash")
-  #
-  # (zsh_completion/"_bar").write Utils.safe_popen_read({ "SHELL" => "zsh" }, bin/"foo", "completions", "zsh")
-  #
-  # @example Using predefined shell_parameter_format :flag
+  # @example Using predefined `shell_parameter_format :flag`
   #   generate_completions_from_executable(bin/"foo", "completions", shell_parameter_format: :flag, shells: [:bash])
-  # translates to
   #
-  # (bash_completion/"foo").write Utils.safe_popen_read({ "SHELL" => "bash" }, bin/"foo", "completions", "--bash")
+  #   # translates to
+  #   (bash_completion/"foo").write Utils.safe_popen_read({ "SHELL" => "bash" }, bin/"foo", "completions", "--bash")
   #
-  # @example Using predefined shell_parameter_format :arg
+  # @example Using predefined `shell_parameter_format :arg`
   #   generate_completions_from_executable(bin/"foo", "completions", shell_parameter_format: :arg, shells: [:bash])
-  # translates to
   #
-  # (bash_completion/"foo").write Utils.safe_popen_read({ "SHELL" => "bash" }, bin/"foo",
-  #                                                     "completions", "--shell=bash")
+  #   # translates to
+  #   (bash_completion/"foo").write Utils.safe_popen_read({ "SHELL" => "bash" }, bin/"foo",
+  #                                                       "completions", "--shell=bash")
   #
-  # @example Using predefined shell_parameter_format :none
+  # @example Using predefined `shell_parameter_format :none`
   #   generate_completions_from_executable(bin/"foo", "completions", shell_parameter_format: :none, shells: [:bash])
-  # translates to
   #
-  # (bash_completion/"foo").write Utils.safe_popen_read({ "SHELL" => "bash" }, bin/"foo", "completions")
+  #   # translates to
+  #   (bash_completion/"foo").write Utils.safe_popen_read({ "SHELL" => "bash" }, bin/"foo", "completions")
   #
-  # @example Using predefined shell_parameter_format :click
+  # @example Using predefined `shell_parameter_format :click`
   #   generate_completions_from_executable(bin/"foo", shell_parameter_format: :click, shells: [:zsh])
-  # translates to
   #
-  # (zsh_completion/"_foo").write Utils.safe_popen_read({ "SHELL" => "zsh", "_FOO_COMPLETE" => "zsh_source" },
-  #                                                     bin/"foo")
+  #   # translates to
+  #   (zsh_completion/"_foo").write Utils.safe_popen_read({ "SHELL" => "zsh", "_FOO_COMPLETE" => "zsh_source" },
+  #                                                       bin/"foo")
   #
-  # @example Using custom shell_parameter_format
+  # @example Using custom `shell_parameter_format`
   #   generate_completions_from_executable(bin/"foo", "completions", shell_parameter_format: "--selected-shell=",
   #                                        shells: [:bash])
-  # translates to
   #
-  # (bash_completion/"foo").write Utils.safe_popen_read({ "SHELL" => "bash" }, bin/"foo",
-  #                                                     "completions", "--selected-shell=bash")
+  #   # translates to
+  #   (bash_completion/"foo").write Utils.safe_popen_read({ "SHELL" => "bash" }, bin/"foo",
+  #                                                       "completions", "--selected-shell=bash")
   sig {
     params(commands: T.any(Pathname, String), base_name: String, shells: T::Array[Symbol],
            shell_parameter_format: T.nilable(T.any(Symbol, String))).void
@@ -1856,11 +1941,8 @@ class Formula
   # an array of all {Formula}
   # this should only be used when users specify `--all` to a command
   # @private
-  def self.all
-    # TODO: ideally avoid using ARGV by moving to e.g. CLI::Parser
-    if ARGV.exclude?("--eval-all") && !Homebrew::EnvConfig.eval_all?
-      odisabled "Formula#all without --eval-all or HOMEBREW_EVAL_ALL"
-    end
+  def self.all(eval_all: false)
+    odisabled "Formula#all without --eval-all or HOMEBREW_EVAL_ALL" if !eval_all && !Homebrew::EnvConfig.eval_all?
 
     (core_names + tap_files).map do |name_or_file|
       Formulary.factory(name_or_file)
@@ -1956,21 +2038,24 @@ class Formula
 
   # True if this formula is provided by Homebrew itself
   # @private
+  sig { returns(T::Boolean) }
   def core_formula?
-    tap&.core_tap?
+    !!tap&.core_tap?
   end
 
   # True if this formula is provided by external Tap
   # @private
+  sig { returns(T::Boolean) }
   def tap?
     return false unless tap
 
-    !tap.core_tap?
+    !T.must(tap).core_tap?
   end
 
   # True if this formula can be installed on this platform
   # Redefined in extend/os.
   # @private
+  sig { returns(T::Boolean) }
   def valid_platform?
     requirements.none?(MacOSRequirement) && requirements.none?(LinuxRequirement)
   end
@@ -2104,7 +2189,7 @@ class Formula
   # @private
   sig { returns(T.nilable(String)) }
   def ruby_source_path
-    path.relative_path_from(tap.path).to_s if tap && path.exist?
+    path.relative_path_from(T.must(tap).path).to_s if tap && path.exist?
   end
 
   # @private
@@ -2173,7 +2258,8 @@ class Formula
       "conflicts_with"           => conflicts.map(&:name),
       "conflicts_with_reasons"   => conflicts.map(&:reason),
       "link_overwrite"           => self.class.link_overwrite_paths.to_a,
-      "caveats"                  => caveats&.gsub(HOMEBREW_PREFIX, HOMEBREW_PREFIX_PLACEHOLDER),
+      "caveats"                  => caveats&.gsub(HOMEBREW_PREFIX, HOMEBREW_PREFIX_PLACEHOLDER)
+                                           &.gsub(HOMEBREW_CELLAR, HOMEBREW_CELLAR_PLACEHOLDER),
       "installed"                => [],
       "linked_keg"               => linked_version&.to_s,
       "pinned"                   => pinned?,
@@ -2192,11 +2278,12 @@ class Formula
     }
 
     if stable
+      stable_spec = T.must(stable)
       hsh["urls"]["stable"] = {
-        "url"      => stable.url,
-        "tag"      => stable.specs[:tag],
-        "revision" => stable.specs[:revision],
-        "checksum" => stable.checksum&.to_s,
+        "url"      => stable_spec.url,
+        "tag"      => stable_spec.specs[:tag],
+        "revision" => stable_spec.specs[:revision],
+        "checksum" => stable_spec.checksum&.to_s,
       }
 
       hsh["bottle"]["stable"] = bottle_hash if bottle_defined?
@@ -2204,8 +2291,8 @@ class Formula
 
     if head
       hsh["urls"]["head"] = {
-        "url"    => head.url,
-        "branch" => head.specs[:branch],
+        "url"    => T.must(head).url,
+        "branch" => T.must(head).specs[:branch],
       }
     end
 
@@ -2341,9 +2428,9 @@ class Formula
     hash
   end
 
-  # Returns the bottle information for a formula
+  # Returns the bottle information for a formula.
   def bottle_hash
-    bottle_spec = stable.bottle_specification
+    bottle_spec = T.must(stable).bottle_specification
     hash = {
       "rebuild"  => bottle_spec.rebuild,
       "root_url" => bottle_spec.root_url,
@@ -2458,11 +2545,20 @@ class Formula
   #
   # @see Utils::Inreplace.inreplace
   # @api public
-  def inreplace(paths, before = nil, after = nil, audit_result = true) # rubocop:disable Style/OptionalBooleanParameter
-    super(paths, before, after, audit_result)
+  sig {
+    params(
+      paths:        T.any(T::Enumerable[T.any(String, Pathname)], String, Pathname),
+      before:       T.nilable(T.any(Pathname, Regexp, String)),
+      after:        T.nilable(T.any(Pathname, String, Symbol)),
+      audit_result: T::Boolean,
+      block:        T.nilable(T.proc.params(s: StringInreplaceExtension).void),
+    ).void
+  }
+  def inreplace(paths, before = nil, after = nil, audit_result = true, &block) # rubocop:disable Style/OptionalBooleanParameter
+    Utils::Inreplace.inreplace(paths, before, after, audit_result: audit_result, &block)
   rescue Utils::Inreplace::Error => e
     onoe e.to_s
-    raise BuildError.new(self, "inreplace", paths, {})
+    raise BuildError.new(self, "inreplace", Array(paths), {})
   end
 
   protected
@@ -2483,7 +2579,8 @@ class Formula
   # Returns a list of Dependency objects that are declared in the formula.
   # @private
   def declared_runtime_dependencies
-    recursive_dependencies do |_, dependency|
+    cache_key = "Formula#declared_runtime_dependencies" unless build.any_args_or_options?
+    Dependency.expand(self, cache_key: cache_key) do |_, dependency|
       Dependency.prune if dependency.build?
       next if dependency.required?
 
@@ -2533,7 +2630,7 @@ class Formula
   #
   # # If there is a "make install" available, please use it!
   # system "make", "install"</pre>
-  sig { params(cmd: T.any(String, Pathname), args: T.any(String, Pathname, Integer)).void }
+  sig { params(cmd: T.any(String, Pathname), args: T.any(String, Integer, Pathname, Symbol)).void }
   def system(cmd, *args)
     verbose_using_dots = Homebrew::EnvConfig.verbose_using_dots?
 
@@ -2543,13 +2640,19 @@ class Formula
     unless verbose?
       case cmd
       when "./configure"
-        pretty_args -= %w[--disable-dependency-tracking --disable-debug --disable-silent-rules]
+        pretty_args -= std_configure_args
+      when "cabal"
+        pretty_args -= std_cabal_v2_args
       when "cargo"
         pretty_args -= std_cargo_args
       when "cmake"
         pretty_args -= std_cmake_args
       when "go"
         pretty_args -= std_go_args
+      when "meson"
+        pretty_args -= std_meson_args
+      when %r{(^|/)(pip|python)(?:[23](?:\.\d{1,2})?)?$}
+        pretty_args -= std_pip_args
       end
     end
     pretty_args.each_index do |i|
@@ -2692,7 +2795,7 @@ class Formula
   end
 
   # Runs `xcodebuild` without Homebrew's compiler environment variables set.
-  sig { params(args: T.any(String, Pathname)).void }
+  sig { params(args: T.any(String, Integer, Pathname, Symbol)).void }
   def xcodebuild(*args)
     removed = ENV.remove_cc_etc
 
@@ -2777,7 +2880,7 @@ class Formula
     active_spec.stage(debug_symbols: debug_symbols) do |staging|
       @source_modified_time = active_spec.source_modified_time
       @buildpath = Pathname.pwd
-      env_home = buildpath/".brew_home"
+      env_home = T.must(buildpath)/".brew_home"
       mkdir_p env_home
 
       stage_env = {
@@ -2913,6 +3016,7 @@ class Formula
     # Whether a livecheck specification is defined or not.
     # It returns true when a livecheck block is present in the {Formula} and
     # false otherwise, and is used by livecheck.
+    sig { returns(T::Boolean) }
     def livecheckable?
       @livecheckable == true
     end
@@ -2920,6 +3024,7 @@ class Formula
     # Whether a service specification is defined or not.
     # It returns true when a service block is present in the {Formula} and
     # false otherwise, and is used by service.
+    sig { returns(T::Boolean) }
     def service?
       @service_block.present?
     end
@@ -3343,7 +3448,7 @@ class Formula
     # explicitly use that compiler in a formula's {#install} block,
     # rather than implicitly finding a suitable compiler with `needs`.
     #
-    # @see #fails_with
+    # @see .fails_with
     def needs(*standards)
       specs.each { |spec| spec.needs(*standards) }
     end
@@ -3440,20 +3545,22 @@ class Formula
       when :clt_installed
         lambda do |_|
           on_macos do
-            T.cast(self, PourBottleCheck).reason(+<<~EOS)
+            T.bind(self, PourBottleCheck)
+            reason(+<<~EOS)
               The bottle needs the Apple Command Line Tools to be installed.
                 You can install them, if desired, with:
                   xcode-select --install
             EOS
-            T.cast(self, PourBottleCheck).satisfy { MacOS::CLT.installed? }
+            satisfy { MacOS::CLT.installed? }
           end
         end
       when :default_prefix
         lambda do |_|
-          T.cast(self, PourBottleCheck).reason(+<<~EOS)
+          T.bind(self, PourBottleCheck)
+          reason(+<<~EOS)
             The bottle (and many others) needs to be installed into #{Homebrew::DEFAULT_PREFIX}.
           EOS
-          T.cast(self, PourBottleCheck).satisfy { HOMEBREW_PREFIX.to_s == Homebrew::DEFAULT_PREFIX }
+          satisfy { HOMEBREW_PREFIX.to_s == Homebrew::DEFAULT_PREFIX }
         end
       else
         raise ArgumentError, "Invalid preset `pour_bottle?` condition" if only_if.present?
@@ -3479,8 +3586,8 @@ class Formula
 
     # Whether this {Formula} is deprecated (i.e. warns on installation).
     # Defaults to false.
-    # @return [Boolean]
     # @see .deprecate!
+    sig { returns(T::Boolean) }
     def deprecated?
       @deprecated == true
     end
@@ -3519,8 +3626,8 @@ class Formula
 
     # Whether this {Formula} is disabled (i.e. cannot be installed).
     # Defaults to false.
-    # @return [Boolean]
     # @see .disable!
+    sig { returns(T::Boolean) }
     def disabled?
       @disabled == true
     end

@@ -132,9 +132,10 @@ module Homebrew
         boolean:     true,
       },
       HOMEBREW_CURLRC:                           {
-        description: "If set, do not pass `--disable` when invoking `curl`(1), which disables the " \
-                     "use of `curlrc`.",
-        boolean:     true,
+        description: "If set to an absolute path (i.e. beginning with `/`), pass it with `--config` when invoking " \
+                     "`curl`(1). " \
+                     "If set but _not_ a valid path, do not pass `--disable`, which disables the " \
+                     "use of `.curlrc`.",
       },
       HOMEBREW_DEBUG:                            {
         description: "If set, always assume `--debug` when running commands.",
@@ -241,8 +242,9 @@ module Homebrew
       HOMEBREW_LIVECHECK_WATCHLIST:              {
         description:  "Consult this file for the list of formulae to check by default when no formula argument " \
                       "is passed to `brew livecheck`.",
-        default_text: "`$HOME/.brew_livecheck_watchlist`",
-        default:      "~/.brew_livecheck_watchlist",
+        default_text: "`$XDG_CONFIG_HOME/homebrew/livecheck_watchlist.txt` if `$XDG_CONFIG_HOME` is set " \
+                      "or `$HOME/.homebrew/livecheck_watchlist.txt` otherwise.",
+        default:      "#{ENV.fetch("HOMEBREW_USER_CONFIG_HOME")}/livecheck_watchlist.txt",
       },
       HOMEBREW_LOGS:                             {
         description:  "Use this directory to store log files.",
@@ -298,7 +300,7 @@ module Homebrew
       },
       HOMEBREW_NO_INSECURE_REDIRECT:             {
         description: "If set, forbid redirects from secure HTTPS to insecure HTTP." \
-                     "\n\n    *Note:* While ensuring your downloads are fully secure, this is likely to cause " \
+                     "\n\n    *Note:* while ensuring your downloads are fully secure, this is likely to cause " \
                      "from-source SourceForge, some GNU & GNOME-hosted formulae to fail to download.",
         boolean:     true,
       },
@@ -315,7 +317,7 @@ module Homebrew
         boolean:     true,
       },
       HOMEBREW_NO_INSTALL_UPGRADE:               {
-        description: "If set, `brew install` <formula> will not upgrade <formula> if it is installed but " \
+        description: "If set, `brew install` <formula|cask> will not upgrade <formula|cask> if it is installed but " \
                      "outdated.",
         boolean:     true,
       },
@@ -326,8 +328,12 @@ module Homebrew
                      "from running `brew install` <formula> or `brew upgrade` <formula>.",
         boolean:     true,
       },
+      HOMEBREW_NO_UPDATE_REPORT_NEW:             {
+        description: "If set, `brew update` will not show the list of newly added formulae/casks.",
+        boolean:     true,
+      },
       HOMEBREW_PIP_INDEX_URL:                    {
-        description:  "If set, `brew install <formula>` will use this URL to download PyPI package resources.",
+        description:  "If set, `brew install` <formula> will use this URL to download PyPI package resources.",
         default_text: "`https://pypi.org/simple`.",
       },
       HOMEBREW_PRY:                              {
@@ -349,17 +355,23 @@ module Homebrew
         boolean:     true,
       },
       HOMEBREW_SORBET_RUNTIME:                   {
-        description: "If set, enable runtime typechecking using Sorbet.",
+        description: "If set, enable runtime typechecking using Sorbet. " \
+                     "Set by default for HOMEBREW_DEVELOPER or when running some developer commands.",
         boolean:     true,
       },
       HOMEBREW_SSH_CONFIG_PATH:                  {
         description:  "If set, Homebrew will use the given config file instead of `~/.ssh/config` when fetching " \
-                      "`git` repos over `ssh`.",
+                      "Git repositories over SSH.",
         default_text: "`$HOME/.ssh/config`",
       },
       HOMEBREW_SVN:                              {
         description:  "Use this as the `svn`(1) binary.",
         default_text: "A Homebrew-built Subversion (if installed), or the system-provided binary.",
+      },
+      HOMEBREW_SYSTEM_ENV_TAKES_PRIORITY:        {
+        description: "If set in Homebrew's system-wide environment file (`/etc/homebrew/brew.env`), " \
+                     "the system-wide environment file will be loaded last to override any prefix or user settings.",
+        boolean:     true,
       },
       HOMEBREW_TEMP:                             {
         description:  "Use this path as the temporary directory for building packages. Changing " \

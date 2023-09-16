@@ -219,6 +219,27 @@ module RuboCop
         end
       end
 
+      # This cop makes sure that formulae depend on `openssl` instead of `quictls`.
+      #
+      # @api private
+      class QuicTLSCheck < FormulaCop
+        extend AutoCorrector
+
+        def audit_formula(_node, _class_node, _parent_class_node, body_node)
+          return if body_node.nil?
+
+          # Enforce use of OpenSSL for TLS dependency in core
+          return if formula_tap != "homebrew-core"
+
+          find_method_with_args(body_node, :depends_on, "quictls") do
+            problem "Formulae in homebrew/core should use 'depends_on \"openssl@3\"' " \
+                    "instead of '#{@offensive_node.source}'." do |corrector|
+              corrector.replace(@offensive_node.source_range, "depends_on \"openssl@3\"")
+            end
+          end
+        end
+      end
+
       # This cop makes sure that formulae do not depend on `pyoxidizer` at build-time
       # or run-time.
       #
@@ -226,24 +247,11 @@ module RuboCop
       class PyoxidizerCheck < FormulaCop
         def audit_formula(_node, _class_node, _parent_class_node, body_node)
           return if body_node.nil?
-
           # Disallow use of PyOxidizer as a dependency in core
           return if formula_tap != "homebrew-core"
+          return unless depends_on?("pyoxidizer")
 
-          find_method_with_args(body_node, :depends_on, "pyoxidizer") do
-            problem "Formulae in homebrew/core should not use '#{@offensive_node.source}'."
-          end
-
-          [
-            :build,
-            [:build],
-            [:build, :test],
-            [:test, :build],
-          ].each do |type|
-            find_method_with_args(body_node, :depends_on, "pyoxidizer" => type) do
-              problem "Formulae in homebrew/core should not use '#{@offensive_node.source}'."
-            end
-          end
+          problem "Formulae in homebrew/core should not use '#{@offensive_node.source}'."
         end
       end
 

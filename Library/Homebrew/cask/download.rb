@@ -24,6 +24,8 @@ module Cask
 
     sig { override.returns(T.nilable(::URL)) }
     def url
+      return if cask.url.nil?
+
       @url ||= ::URL.new(cask.url.to_s, cask.url.specs)
     end
 
@@ -34,6 +36,8 @@ module Cask
 
     sig { override.returns(T.nilable(Version)) }
     def version
+      return if cask.version.nil?
+
       @version ||= Version.new(cask.version)
     end
 

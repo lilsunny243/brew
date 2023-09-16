@@ -429,7 +429,7 @@ describe Formula do
 
     example "alias paths with tab with non alias source path" do
       alias_path = (CoreTap.instance.alias_dir/"another_name")
-      source_path = (CoreTap.instance.formula_dir/"another_other_name")
+      source_path = CoreTap.instance.new_formula_path("another_other_name")
 
       f = formula alias_path: alias_path do
         url "foo-1.0"
@@ -463,6 +463,26 @@ describe Formula do
       end
 
       expect { f.inreplace([]) }.to raise_error(BuildError)
+    end
+
+    specify "replaces text in file" do
+      file = Tempfile.new("test")
+      File.binwrite(file, <<~EOS)
+        ab
+        bc
+        cd
+      EOS
+      f = formula do
+        url "https://brew.sh/test-1.0.tbz"
+      end
+      f.inreplace(file.path) do |s|
+        s.gsub!("bc", "yz")
+      end
+      expect(File.binread(file)).to eq <<~EOS
+        ab
+        yz
+        cd
+      EOS
     end
   end
 
@@ -940,7 +960,7 @@ describe Formula do
   end
 
   describe "#to_hash_with_variations", :needs_macos do
-    let(:formula_path) { CoreTap.new.formula_dir/"foo-variations.rb" }
+    let(:formula_path) { CoreTap.new.new_formula_path("foo-variations") }
     let(:formula_content) do
       <<~RUBY
         class FooVariations < Formula

@@ -3,6 +3,7 @@
 
 require "cli/parser"
 require "cask/cask"
+require "formula"
 
 module Homebrew
   module_function
@@ -11,8 +12,7 @@ module Homebrew
   def generate_cask_api_args
     Homebrew::CLI::Parser.new do
       description <<~EOS
-        Generates Cask API data files for formulae.brew.sh.
-
+        Generate `homebrew/cask` API data files for <#{HOMEBREW_API_WWW}>.
         The generated files are written to the current directory.
       EOS
 
@@ -42,7 +42,7 @@ module Homebrew
   def generate_cask_api
     args = generate_cask_api_args.parse
 
-    tap = Tap.default_cask_tap
+    tap = CoreCaskTap.instance
     raise TapUnavailableError, tap.name unless tap.installed?
 
     unless args.dry_run?
@@ -52,7 +52,8 @@ module Homebrew
     end
 
     Homebrew.with_no_api_env do
-      File.write("api/cask_tap_migrations.json", JSON.dump(tap.tap_migrations)) unless args.dry_run?
+      tap_migrations_json = JSON.dump(tap.tap_migrations)
+      File.write("api/cask_tap_migrations.json", tap_migrations_json) unless args.dry_run?
 
       Cask::Cask.generating_hash!
 
@@ -60,12 +61,14 @@ module Homebrew
         cask = Cask::CaskLoader.load(path)
         name = cask.token
         json = JSON.pretty_generate(cask.to_hash_with_variations)
+        cask_source = path.read
+        html_template_name = html_template(name)
 
         unless args.dry_run?
           File.write("_data/cask/#{name}.json", "#{json}\n")
           File.write("api/cask/#{name}.json", CASK_JSON_TEMPLATE)
-          File.write("api/cask-source/#{name}.rb", path.read)
-          File.write("cask/#{name}.html", html_template(name))
+          File.write("api/cask-source/#{name}.rb", cask_source)
+          File.write("cask/#{name}.html", html_template_name)
         end
       rescue
         onoe "Error while generating data for cask '#{path.stem}'."

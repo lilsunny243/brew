@@ -25,7 +25,6 @@ module Homebrew
     Homebrew::CLI::Parser.new do
       description <<~EOS
         Display brief statistics for your Homebrew installation.
-
         If a <formula> or <cask> is provided, show summary of information about it.
       EOS
       switch "--analytics",
@@ -194,7 +193,7 @@ module Homebrew
       raise UsageError, "Cannot specify `--cask` when using `--json=v1`!" if args.cask?
 
       formulae = if all
-        Formula.all.sort
+        Formula.all(eval_all: args.eval_all?).sort
       elsif args.installed?
         Formula.installed.sort
       else
@@ -208,7 +207,7 @@ module Homebrew
       end
     when :v2
       formulae, casks = if all
-        [Formula.all.sort, Cask::Cask.all.sort_by(&:full_name)]
+        [Formula.all(eval_all: args.eval_all?).sort, Cask::Cask.all.sort_by(&:full_name)]
       elsif args.installed?
         [Formula.installed.sort, Cask::Caskroom.casks.sort_by(&:full_name)]
       else
@@ -241,18 +240,23 @@ module Homebrew
     end
   end
 
-  def github_info(formula)
-    return formula.path if formula.tap.blank? || formula.tap.remote.blank?
+  def github_info(formula_or_cask)
+    return formula_or_cask.path if formula_or_cask.tap.blank? || formula_or_cask.tap.remote.blank?
 
-    path = case formula
+    path = case formula_or_cask
     when Formula
-      formula.path.relative_path_from(formula.tap.path)
+      formula = formula_or_cask
+      formula.path.relative_path_from(T.must(formula.tap).path)
     when Cask::Cask
-      return "#{formula.tap.default_remote}/blob/HEAD/Casks/#{formula.token}.rb" if formula.sourcefile_path.blank?
+      cask = formula_or_cask
+      if cask.sourcefile_path.blank?
+        return "#{cask.tap.default_remote}/blob/HEAD/#{cask.tap.relative_cask_path(cask.token)}"
+      end
 
-      formula.sourcefile_path.relative_path_from(formula.tap.path)
+      cask.sourcefile_path.relative_path_from(cask.tap.path)
     end
-    github_remote_path(formula.tap.remote, path)
+
+    github_remote_path(formula_or_cask.tap.remote, path)
   end
 
   def info_formula(formula, args:)

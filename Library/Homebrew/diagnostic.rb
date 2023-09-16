@@ -531,7 +531,7 @@ module Homebrew
       end
 
       def check_casktap_integrity
-        default_cask_tap = Tap.default_cask_tap
+        default_cask_tap = CoreCaskTap.instance
         return unless default_cask_tap.installed?
 
         broken_tap(default_cask_tap) || examine_git_origin(default_cask_tap.git_repo, default_cask_tap.remote)
@@ -861,7 +861,7 @@ module Homebrew
         return if Homebrew::EnvConfig.no_install_from_api?
         return if Homebrew::Settings.read("devcmdrun") == "true"
 
-        cask_tap = Tap.fetch("homebrew", "cask")
+        cask_tap = CoreCaskTap.instance
         return unless cask_tap.installed?
 
         <<~EOS
@@ -921,12 +921,13 @@ module Homebrew
       end
 
       def check_cask_taps
-        default_cask_tap = Tap.default_cask_tap
-        alt_taps = Tap.select { |t| t.cask_dir.exist? && t != default_cask_tap }
+        default_cask_tap = CoreCaskTap.instance
+        taps = Tap.select { |t| t.cask_dir.exist? && t != default_cask_tap }
+        taps.prepend(default_cask_tap) if EnvConfig.no_install_from_api?
 
         error_tap_paths = []
 
-        add_info "Homebrew Cask Taps:", ([default_cask_tap, *alt_taps].map do |tap|
+        add_info "Homebrew Cask Taps:", (taps.map do |tap|
           if tap.path.blank?
             none_string
           else
@@ -941,8 +942,8 @@ module Homebrew
           end
         end)
 
-        taps = Utils.pluralize("tap", error_tap_paths.count)
-        "Unable to read from cask #{taps}: #{error_tap_paths.to_sentence}" if error_tap_paths.present?
+        taps_string = Utils.pluralize("tap", error_tap_paths.count)
+        "Unable to read from cask #{taps_string}: #{error_tap_paths.to_sentence}" if error_tap_paths.present?
       end
 
       def check_cask_load_path

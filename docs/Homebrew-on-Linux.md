@@ -1,6 +1,6 @@
 ---
-logo: https://brew.sh/assets/img/linuxbrew.png
-image: https://brew.sh/assets/img/linuxbrew.png
+logo: /assets/img/linuxbrew.png
+image: /assets/img/linuxbrew.png
 redirect_from:
   - /linux
   - /Linux
@@ -65,6 +65,12 @@ To install build tools, paste at a terminal prompt:
   ```sh
   sudo yum groupinstall 'Development Tools'
   sudo yum install procps-ng curl file git
+  ```
+
+- **Arch Linux**
+
+  ```sh
+  sudo pacman -Syu base-devel procps-ng curl file git
   ```
 
 ### ARM (unsupported)

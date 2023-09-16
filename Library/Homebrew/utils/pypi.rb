@@ -65,7 +65,7 @@ module PyPI
       else
         "https://pypi.org/pypi/#{name}/json"
       end
-      out, _, status = curl_output metadata_url, "--location", "--fail"
+      out, _, status = Utils::Curl.curl_output metadata_url, "--location", "--fail"
 
       return unless status.success?
 
@@ -76,7 +76,7 @@ module PyPI
       end
 
       sdist = json["urls"].find { |url| url["packagetype"] == "sdist" }
-      return json["info"]["name"] if sdist.nil?
+      return if sdist.nil?
 
       @pypi_info = [
         PyPI.normalize_python_package(json["info"]["name"]), sdist["url"],
@@ -127,9 +127,9 @@ module PyPI
         match = File.basename(@package_string).match(/^(.+)-([a-z\d.]+?)(?:.tar.gz|.zip)$/)
         raise ArgumentError, "Package should be a valid PyPI URL" if match.blank?
 
-        @name = PyPI.normalize_python_package match[1]
-        @extras = []
-        @version = match[2]
+        @name ||= PyPI.normalize_python_package match[1]
+        @extras ||= []
+        @version ||= match[2]
       elsif @is_url
         ensure_formula_installed!("python")
 
@@ -152,9 +152,9 @@ module PyPI
 
         metadata = JSON.parse(pip_output)["install"].first["metadata"]
 
-        @name = PyPI.normalize_python_package metadata["name"]
-        @extras = []
-        @version = metadata["version"]
+        @name ||= PyPI.normalize_python_package metadata["name"]
+        @extras ||= []
+        @version ||= metadata["version"]
       else
         if @package_string.include? "=="
           name, version = @package_string.split("==")
@@ -170,9 +170,9 @@ module PyPI
           extras = []
         end
 
-        @name = PyPI.normalize_python_package name
-        @extras = extras
-        @version = version
+        @name ||= PyPI.normalize_python_package name
+        @extras ||= extras
+        @version ||= version
       end
     end
   end
@@ -228,7 +228,13 @@ module PyPI
     main_package = if package_name.present?
       Package.new(package_name)
     else
-      Package.new(formula.stable.url, is_url: true)
+      stable = T.must(formula.stable)
+      url = if stable.specs[:tag].present?
+        url = "git+#{stable.url}@#{stable.specs[:tag]}"
+      else
+        stable.url
+      end
+      Package.new(url, is_url: true)
     end
 
     if version.present?
@@ -244,7 +250,7 @@ module PyPI
 
     extra_packages = (extra_packages || []).map { |p| Package.new p }
     exclude_packages = (exclude_packages || []).map { |p| Package.new p }
-    exclude_packages += %W[#{main_package.name} argparse pip setuptools wsgiref].map { |p| Package.new p }
+    exclude_packages += %w[argparse pip setuptools wsgiref].map { |p| Package.new p }
     # remove packages from the exclude list if we've explicitly requested them as an extra package
     exclude_packages.delete_if { |package| extra_packages.include?(package) }
 
@@ -272,20 +278,13 @@ module PyPI
 
     ensure_formula_installed!("python")
 
+    # Resolve the dependency tree of all input packages
     ohai "Retrieving PyPI dependencies for \"#{input_packages.join(" ")}\"..." if !print_only && !silent
-    command =
-      [Formula["python"].bin/"python3", "-m", "pip", "install", "-q", "--dry-run", "--ignore-installed", "--report",
-       "/dev/stdout", *input_packages.map(&:to_s)]
-    pip_output = Utils.popen_read({ "PIP_REQUIRE_VIRTUALENV" => "false" }, *command)
-    unless $CHILD_STATUS.success?
-      odie <<~EOS
-        Unable to determine dependencies for "#{input_packages.join(" ")}" because of a failure when running
-        `#{command.join(" ")}`.
-        Please update the resources for "#{formula.name}" manually.
-      EOS
-    end
-
-    found_packages = pip_report_to_packages(JSON.parse(pip_output), exclude_packages).uniq
+    found_packages = pip_report(input_packages)
+    # Resolve the dependency tree of excluded packages to prune the above
+    exclude_packages.delete_if { |package| found_packages.exclude? package }
+    ohai "Retrieving PyPI dependencies for excluded \"#{exclude_packages.join(" ")}\"..." if !print_only && !silent
+    exclude_packages = pip_report(exclude_packages) + [Package.new(main_package.name)]
 
     new_resource_blocks = ""
     found_packages.sort.each do |package|
@@ -349,16 +348,30 @@ module PyPI
     name.gsub(/[-_.]+/, "-").downcase
   end
 
-  def self.pip_report_to_packages(report, exclude_packages)
+  def self.pip_report(packages)
+    return [] if packages.blank?
+
+    command = [Formula["python"].bin/"python3", "-m", "pip", "install", "-q", "--dry-run",
+               "--ignore-installed", "--report=/dev/stdout", *packages.map(&:to_s)]
+    pip_output = Utils.popen_read({ "PIP_REQUIRE_VIRTUALENV" => "false" }, *command)
+    unless $CHILD_STATUS.success?
+      odie <<~EOS
+        Unable to determine dependencies for "#{packages.join(" ")}" because of a failure when running
+        `#{command.join(" ")}`.
+        Please update the resources manually.
+      EOS
+    end
+    pip_report_to_packages(JSON.parse(pip_output)).uniq
+  end
+
+  def self.pip_report_to_packages(report)
     return [] if report.blank?
 
     report["install"].map do |package|
       name = normalize_python_package(package["metadata"]["name"])
       version = package["metadata"]["version"]
 
-      package = Package.new "#{name}==#{version}"
-
-      package if exclude_packages.exclude? package
+      Package.new "#{name}==#{version}"
     end.compact
   end
 end

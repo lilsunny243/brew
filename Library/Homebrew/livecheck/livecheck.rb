@@ -265,7 +265,7 @@ module Homebrew
           if formula.head_only?
             formula.any_installed_version.version.commit
           else
-            formula.stable.version
+            T.must(formula.stable).version
           end
         else
           Version.new(formula_or_cask.version)
@@ -275,7 +275,7 @@ module Homebrew
         current = LivecheckVersion.create(formula_or_cask, current)
 
         latest = if formula&.head_only?
-          formula.head.downloader.fetch_last_commit
+          T.must(formula.head).downloader.fetch_last_commit
         else
           version_info = latest_version(
             formula_or_cask,
@@ -397,7 +397,7 @@ module Homebrew
         end
       end
 
-      puts "No newer upstream versions." if newer_only && !has_a_newer_upstream_version && !debug && !json
+      puts "No newer upstream versions." if newer_only && !has_a_newer_upstream_version && !debug && !json && !quiet
 
       return unless json
 
@@ -534,10 +534,10 @@ module Homebrew
       case package_or_resource
       when Formula
         if package_or_resource.stable
-          urls << package_or_resource.stable.url
-          urls.concat(package_or_resource.stable.mirrors)
+          urls << T.must(package_or_resource.stable).url
+          urls.concat(T.must(package_or_resource.stable).mirrors)
         end
-        urls << package_or_resource.head.url if package_or_resource.head
+        urls << T.must(package_or_resource.head).url if package_or_resource.head
         urls << package_or_resource.homepage if package_or_resource.homepage
       when Cask::Cask
         urls << package_or_resource.url.to_s if package_or_resource.url
@@ -561,25 +561,24 @@ module Homebrew
       end
 
       host = uri.host
-      domain = uri.domain
       path = uri.path
       return url if host.nil? || path.nil?
 
-      domain = host = "github.com" if host == "github.s3.amazonaws.com"
+      host = "github.com" if host == "github.s3.amazonaws.com"
       path = path.delete_prefix("/").delete_suffix(".git")
       scheme = uri.scheme
 
-      if domain == "github.com"
+      if host == "github.com"
         return url if path.match? %r{/releases/latest/?$}
 
         owner, repo = path.delete_prefix("downloads/").split("/")
         url = "#{scheme}://#{host}/#{owner}/#{repo}.git"
-      elsif GITEA_INSTANCES.include?(domain)
+      elsif GITEA_INSTANCES.include?(host)
         return url if path.match? %r{/releases/latest/?$}
 
         owner, repo = path.split("/")
         url = "#{scheme}://#{host}/#{owner}/#{repo}.git"
-      elsif GOGS_INSTANCES.include?(domain)
+      elsif GOGS_INSTANCES.include?(host)
         owner, repo = path.split("/")
         url = "#{scheme}://#{host}/#{owner}/#{repo}.git"
       # sourcehut

@@ -11,6 +11,7 @@ module Homebrew
   # @api private
   class FormulaAuditor
     include FormulaCellarChecks
+    include Utils::Curl
 
     attr_reader :formula, :text, :problems, :new_formula_problems
 
@@ -123,6 +124,14 @@ module Homebrew
           EOS
         end
       end
+
+      return if !formula.core_formula? || formula.path == formula.tap.new_formula_path(formula.name)
+
+      problem <<~EOS
+        Formula is in wrong path:
+          Expected: #{formula.tap.new_formula_path(formula.name)}
+            Actual: #{formula.path}
+      EOS
     end
 
     def self.aliases
@@ -414,7 +423,7 @@ module Homebrew
 
         problem "Formula should not conflict with itself" if formula == conflicting_formula
 
-        if tap.formula_renames.key?(conflict.name) || tap.aliases.include?(conflict.name)
+        if T.must(tap).formula_renames.key?(conflict.name) || T.must(tap).aliases.include?(conflict.name)
           problem "Formula conflict should be declared using " \
                   "canonical name (#{conflicting_formula.name}) instead of #{conflict.name}"
         end
@@ -422,7 +431,8 @@ module Homebrew
         reverse_conflict_found = T.let(false, T::Boolean)
         conflicting_formula.conflicts.each do |reverse_conflict|
           reverse_conflict_formula = Formulary.factory(reverse_conflict.name)
-          if tap.formula_renames.key?(reverse_conflict.name) || tap.aliases.include?(reverse_conflict.name)
+          if T.must(tap).formula_renames.key?(reverse_conflict.name) ||
+             T.must(tap).aliases.include?(reverse_conflict.name)
             problem "Formula #{conflicting_formula.name} conflict should be declared using " \
                     "canonical name (#{reverse_conflict_formula.name}) instead of #{reverse_conflict.name}"
           end
@@ -444,15 +454,8 @@ module Homebrew
 
     def audit_gcc_dependency
       return unless @core_tap
-      return if !@strict && !(@git && formula.tap.git?) # git log is required for non-strict audit
       return unless Homebrew::SimulateSystem.simulating_or_running_on_linux?
       return unless linux_only_gcc_dep?(formula)
-
-      bad_gcc_dep = @strict || begin
-        fv = FormulaVersions.new(formula)
-        fv.formula_at_revision("origin/HEAD") { |prev_f| !linux_only_gcc_dep?(prev_f) }
-      end
-      return unless bad_gcc_dep
 
       problem "Formulae in homebrew/core should not have a Linux-only dependency on GCC."
     end
@@ -492,6 +495,30 @@ module Homebrew
 
       problem "Elasticsearch and Kibana were relicensed to a non-open-source license from version 7.11. " \
               "They must not be upgraded to version 7.11 or newer."
+    end
+
+    # https://www.hashicorp.com/license-faq#products-covered-by-bsl
+    HASHICORP_RELICENSED_FORMULAE_VERSIONS = {
+      "terraform"         => "1.6",
+      "packer"            => "1.10",
+      "vault"             => "1.15",
+      "boundary"          => "0.14",
+      "consul"            => "1.17",
+      "nomad"             => "1.7",
+      "waypoint"          => "0.12",
+      "vagrant"           => "2.4",
+      "vagrant-compleion" => "2.4",
+    }.freeze
+
+    def audit_hashicorp_formulae
+      return unless HASHICORP_RELICENSED_FORMULAE_VERSIONS.key? formula.name
+      return unless @core_tap
+
+      relicensed_version = Version.new(HASHICORP_RELICENSED_FORMULAE_VERSIONS[formula.name])
+      return if formula.version < relicensed_version
+
+      problem "#{formula.name} was relicensed to a non-open-source license from version #{relicensed_version}. " \
+              "It must not be upgraded to version #{relicensed_version} or newer."
     end
 
     def audit_keg_only_reason
@@ -535,12 +562,14 @@ module Homebrew
         spec.using == :homebrew_curl
       end
 
-      if (http_content_problem = curl_check_http_content(homepage,
-                                                         SharedAudits::URL_TYPE_HOMEPAGE,
-                                                         user_agents:       [:browser, :default],
-                                                         check_content:     true,
-                                                         strict:            @strict,
-                                                         use_homebrew_curl: use_homebrew_curl))
+      if (http_content_problem = curl_check_http_content(
+        homepage,
+        SharedAudits::URL_TYPE_HOMEPAGE,
+        user_agents:       [:browser, :default],
+        check_content:     true,
+        strict:            @strict,
+        use_homebrew_curl: use_homebrew_curl,
+      ))
         problem http_content_problem
       end
     end
@@ -769,9 +798,9 @@ module Homebrew
       newest_committed_revision = T.let(nil, T.nilable(Integer))
       newest_committed_url = T.let(nil, T.nilable(String))
 
-      fv.rev_list("origin/HEAD") do |rev|
+      fv.rev_list("origin/HEAD") do |revision, path|
         begin
-          fv.formula_at_revision(rev) do |f|
+          fv.formula_at_revision(revision, path) do |f|
             stable = f.stable
             next if stable.blank?
 

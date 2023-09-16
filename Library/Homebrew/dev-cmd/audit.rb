@@ -136,7 +136,7 @@ module Homebrew
                     "brew audit --eval-all or HOMEBREW_EVAL_ALL"
         end
         no_named_args = true
-        [Formula.all, Cask::Cask.all]
+        [Formula.all(eval_all: args.eval_all?), Cask::Cask.all]
       else
         if args.named.any? { |named_arg| named_arg.end_with?(".rb") }
           odisabled "brew audit [path ...]",
@@ -187,6 +187,8 @@ module Homebrew
     spdx_license_data = SPDX.license_data
     spdx_exception_data = SPDX.exception_data
 
+    clear_formulary_cache = [args.os, args.arch].any?
+
     formula_problems = audit_formulae.sort.each_with_object({}) do |f, problems|
       path = f.path
 
@@ -208,7 +210,7 @@ module Homebrew
         SimulateSystem.with os: os, arch: arch do
           odebug "Auditing Formula #{f} on os #{os} and arch #{arch}"
 
-          Formulary.clear_cache
+          Formulary.clear_cache if clear_formulary_cache
 
           audit_proc = proc { FormulaAuditor.new(Formulary.factory(path), **options).tap(&:audit) }
 

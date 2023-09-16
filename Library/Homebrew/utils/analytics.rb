@@ -12,7 +12,7 @@ module Utils
   # @api private
   module Analytics
     INFLUX_BUCKET = "analytics"
-    INFLUX_TOKEN = "cSVYFCexszYqAy2h7PpURZuud3VuZzVXtajCtvoPbACseY_XD9LqqGHdKg5W9QAyxYWoHT6jnJHFJzlsy5X2Rg=="
+    INFLUX_TOKEN = "iVdsgJ_OjvTYGAA79gOfWlA_fX0QCuj4eYUNdb-qVUTrC3tp3JTWCADVNE9HxV0kp2ZjIK9tuthy_teX4szr9A=="
     INFLUX_HOST = "https://eu-central-1-1.aws.cloud2.influxdata.com"
     INFLUX_ORG = "d81a3e6d582d485f"
 
@@ -108,8 +108,14 @@ options: options)
         report_influx_event(:build_error, package_name: formula.name, tap_name: tap.name, options: options)
       end
 
+      def influx_message_displayed?
+        config_true?(:influxanalyticsmessage)
+      end
+
       def messages_displayed?
-        config_true?(:analyticsmessage) && config_true?(:caskanalyticsmessage)
+        config_true?(:analyticsmessage) &&
+          config_true?(:caskanalyticsmessage) &&
+          influx_message_displayed?
       end
 
       def disabled?
@@ -130,6 +136,7 @@ options: options)
       def messages_displayed!
         Homebrew::Settings.write :analyticsmessage, true
         Homebrew::Settings.write :caskanalyticsmessage, true
+        Homebrew::Settings.write :influxanalyticsmessage, true
       end
 
       def enable!
@@ -216,6 +223,7 @@ options: options)
         return unless formula.core_formula?
 
         escaped_formula_name = GitHubPackages.image_formula_name(formula.name)
+                                             .gsub("/", "%2F")
         formula_url_suffix = "container/core%2F#{escaped_formula_name}/"
         formula_url = "https://github.com/Homebrew/homebrew-core/pkgs/#{formula_url_suffix}"
         output = Utils::Curl.curl_output("--fail", formula_url)

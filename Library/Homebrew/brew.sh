@@ -313,11 +313,11 @@ auto-update() {
     repo_fetch_heads=("${HOMEBREW_REPOSITORY}/.git/FETCH_HEAD")
     # We might have done an auto-update recently, but not a core/cask clone auto-update.
     # So we check the core/cask clone FETCH_HEAD too.
-    if [[ -n "${HOMEBREW_UPDATE_CORE_TAP}" && -d "${HOMEBREW_CORE_REPOSITORY}/.git" ]]
+    if [[ -n "${HOMEBREW_AUTO_UPDATE_CORE_TAP}" && -d "${HOMEBREW_CORE_REPOSITORY}/.git" ]]
     then
       repo_fetch_heads+=("${HOMEBREW_CORE_REPOSITORY}/.git/FETCH_HEAD")
     fi
-    if [[ -n "${HOMEBREW_UPDATE_CASK_TAP}" && -d "${HOMEBREW_CASK_REPOSITORY}/.git" ]]
+    if [[ -n "${HOMEBREW_AUTO_UPDATE_CASK_TAP}" && -d "${HOMEBREW_CASK_REPOSITORY}/.git" ]]
     then
       repo_fetch_heads+=("${HOMEBREW_CASK_REPOSITORY}/.git/FETCH_HEAD")
     fi
@@ -365,8 +365,8 @@ auto-update() {
   unset AUTO_UPDATE_COMMANDS
   unset AUTO_UPDATE_CORE_TAP_COMMANDS
   unset AUTO_UPDATE_CASK_TAP_COMMANDS
-  unset HOMEBREW_UPDATE_CORE_TAP
-  unset HOMEBREW_UPDATE_CASK_TAP
+  unset HOMEBREW_AUTO_UPDATE_CORE_TAP
+  unset HOMEBREW_AUTO_UPDATE_CASK_TAP
 }
 
 #####
@@ -533,8 +533,6 @@ then
   # shellcheck disable=SC2086,SC2183
   printf -v HOMEBREW_MACOS_VERSION_NUMERIC "%02d%02d%02d" ${HOMEBREW_MACOS_VERSION//./ }
   # shellcheck disable=SC2248
-  printf -v HOMEBREW_MACOS_OLDEST_SUPPORTED_NUMERIC "%02d%02d%02d" ${HOMEBREW_MACOS_OLDEST_SUPPORTED//./ }
-  # shellcheck disable=SC2248
   printf -v HOMEBREW_MACOS_OLDEST_ALLOWED_NUMERIC "%02d%02d%02d" ${HOMEBREW_MACOS_OLDEST_ALLOWED//./ }
 
   # Don't include minor versions for Big Sur and later.
@@ -593,14 +591,10 @@ then
     # shellcheck disable=SC2034
     HOMEBREW_MACOS_SYSTEM_RUBY_NEW_ENOUGH="1"
   fi
-
-  # Don't support API at this time for older macOS versions.
-  if [[ "${HOMEBREW_MACOS_VERSION_NUMERIC}" -lt "${HOMEBREW_MACOS_OLDEST_SUPPORTED_NUMERIC}" ]]
-  then
-    export HOMEBREW_NO_INSTALL_FROM_API=1
-  fi
 else
   HOMEBREW_PRODUCT="${HOMEBREW_SYSTEM}brew"
+  # Don't try to follow /etc/os-release
+  # shellcheck disable=SC1091,SC2154
   [[ -n "${HOMEBREW_LINUX}" ]] && HOMEBREW_OS_VERSION="$(source /etc/os-release && echo "${PRETTY_NAME}")"
   : "${HOMEBREW_OS_VERSION:=$(uname -r)}"
   HOMEBREW_OS_USER_AGENT_VERSION="${HOMEBREW_OS_VERSION}"
@@ -669,12 +663,6 @@ Your Git executable: $(unset git && type -p "${HOMEBREW_GIT}")"
     # shellcheck disable=SC2034
     HOMEBREW_LINUXBREW_CORE_MIGRATION=1
   fi
-fi
-
-# Generic OS or non-default prefix: API not supported.
-if [[ (-z "${HOMEBREW_MACOS}" && -z "${HOMEBREW_LINUX}") || "${HOMEBREW_PREFIX}" != "${HOMEBREW_DEFAULT_PREFIX}" ]]
-then
-  export HOMEBREW_NO_INSTALL_FROM_API=1
 fi
 
 setup_ca_certificates() {
@@ -824,6 +812,7 @@ case "${HOMEBREW_COMMAND}" in
   ln) HOMEBREW_COMMAND="link" ;;
   instal) HOMEBREW_COMMAND="install" ;; # gem does the same
   uninstal) HOMEBREW_COMMAND="uninstall" ;;
+  post_install) HOMEBREW_COMMAND="postinstall" ;;
   rm) HOMEBREW_COMMAND="uninstall" ;;
   remove) HOMEBREW_COMMAND="uninstall" ;;
   abv) HOMEBREW_COMMAND="info" ;;
@@ -875,7 +864,9 @@ AUTO_UPDATE_CORE_TAP_COMMANDS=(
 if check-array-membership "${HOMEBREW_COMMAND}" "${AUTO_UPDATE_CORE_TAP_COMMANDS[@]}"
 then
   export HOMEBREW_AUTO_UPDATE_COMMAND="1"
-  export HOMEBREW_UPDATE_CORE_TAP="1"
+  export HOMEBREW_AUTO_UPDATE_CORE_TAP="1"
+else
+  unset HOMEBREW_AUTO_UPDATE_CORE_TAP
 fi
 
 # Check for commands that should auto-update the homebrew-cask tap.
@@ -887,7 +878,9 @@ AUTO_UPDATE_CASK_TAP_COMMANDS=(
 if check-array-membership "${HOMEBREW_COMMAND}" "${AUTO_UPDATE_CASK_TAP_COMMANDS[@]}"
 then
   export HOMEBREW_AUTO_UPDATE_COMMAND="1"
-  export HOMEBREW_UPDATE_CASK_TAP="1"
+  export HOMEBREW_AUTO_UPDATE_CASK_TAP="1"
+else
+  unset HOMEBREW_AUTO_UPDATE_CORE_TAP
 fi
 
 # Disable Ruby options we don't need.
@@ -919,6 +912,13 @@ then
   export HOMEBREW_DEVELOPER_COMMAND="1"
 fi
 
+# Provide a (temporary, undocumented) way to disable Sorbet globally if needed
+# to avoid reverting the above.
+if [[ -n "${HOMEBREW_NO_SORBET_RUNTIME}" ]]
+then
+  unset HOMEBREW_SORBET_RUNTIME
+fi
+
 if [[ -n "${HOMEBREW_DEVELOPER_COMMAND}" && -z "${HOMEBREW_DEVELOPER}" ]]
 then
   if [[ -z "${HOMEBREW_DEV_CMD_RUN}" ]]
@@ -934,6 +934,12 @@ EOS
 
   git config --file="${HOMEBREW_GIT_CONFIG_FILE}" --replace-all homebrew.devcmdrun true 2>/dev/null
   export HOMEBREW_DEV_CMD_RUN="1"
+fi
+
+if [[ -n "${HOMEBREW_DEVELOPER}" || -n "${HOMEBREW_DEV_CMD_RUN}" ]]
+then
+  # Always run with Sorbet for Homebrew developers or when a Homebrew developer command has been run.
+  export HOMEBREW_SORBET_RUNTIME="1"
 fi
 
 if [[ -f "${HOMEBREW_LIBRARY}/Homebrew/cmd/${HOMEBREW_COMMAND}.sh" ]]

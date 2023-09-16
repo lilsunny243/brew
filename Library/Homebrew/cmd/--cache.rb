@@ -1,4 +1,4 @@
-# typed: true
+# typed: strict
 # frozen_string_literal: true
 
 require "fetch"
@@ -59,7 +59,7 @@ module Homebrew
     formulae_or_casks.each do |formula_or_cask|
       case formula_or_cask
       when Formula
-        formula = T.cast(formula_or_cask, Formula)
+        formula = formula_or_cask
         ref = formula.loaded_from_api? ? formula.full_name : formula.path
 
         os_arch_combinations.each do |os, arch|
@@ -110,7 +110,7 @@ module Homebrew
 
       puts bottle.cached_download
     elsif args.HEAD?
-      puts formula.head.cached_download
+      puts T.must(formula.head).cached_download
     else
       puts formula.cached_download
     end

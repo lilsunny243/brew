@@ -9,17 +9,14 @@ require "livecheck/strategy"
 module Homebrew
   module_function
 
-  WATCHLIST_PATH = File.expand_path(Homebrew::EnvConfig.livecheck_watchlist).freeze
-
   sig { returns(CLI::Parser) }
   def livecheck_args
     Homebrew::CLI::Parser.new do
       description <<~EOS
         Check for newer versions of formulae and/or casks from upstream.
-
         If no formula or cask argument is passed, the list of formulae and
         casks to check is taken from `HOMEBREW_LIVECHECK_WATCHLIST` or
-        `~/.brew_livecheck_watchlist`.
+        `~/.homebrew/livecheck_watchlist.txt`.
       EOS
       switch "--full-name",
              description: "Print formulae and casks with fully-qualified names."
@@ -50,6 +47,22 @@ module Homebrew
     end
   end
 
+  def watchlist_path
+    @watchlist_path ||= begin
+      watchlist = File.expand_path(Homebrew::EnvConfig.livecheck_watchlist)
+
+      unless File.exist?(watchlist)
+        previous_default_watchlist = File.expand_path("~/.brew_livecheck_watchlist")
+        if File.exist?(previous_default_watchlist)
+          odeprecated "~/.brew_livecheck_watchlist", "~/.homebrew/livecheck_watchlist.txt"
+          watchlist = previous_default_watchlist
+        end
+      end
+
+      watchlist
+    end
+  end
+
   def livecheck
     args = livecheck_args.parse
 
@@ -71,7 +84,7 @@ module Homebrew
         casks = args.formula? ? [] : Cask::Caskroom.casks
         formulae + casks
       elsif all
-        formulae = args.cask? ? [] : Formula.all
+        formulae = args.cask? ? [] : Formula.all(eval_all: args.eval_all?)
         casks = args.formula? ? [] : Cask::Cask.all
         formulae + casks
       elsif args.named.present?
@@ -82,9 +95,9 @@ module Homebrew
         else
           args.named.to_formulae_and_casks
         end
-      elsif File.exist?(WATCHLIST_PATH)
+      elsif File.exist?(watchlist_path)
         begin
-          names = Pathname.new(WATCHLIST_PATH).read.lines
+          names = Pathname.new(watchlist_path).read.lines
                           .reject { |line| line.start_with?("#") || line.blank? }
                           .map(&:strip)
 

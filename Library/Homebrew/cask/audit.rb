@@ -15,6 +15,7 @@ module Cask
   #
   # @api private
   class Audit
+    include ::Utils::Curl
     extend Predicable
 
     attr_reader :cask, :download
@@ -225,6 +226,7 @@ module Cask
     sig { void }
     def audit_sha256_no_check_if_latest
       return unless cask.sha256
+      return unless cask.version
 
       odebug "Auditing sha256 :no_check with version :latest"
       return unless cask.version.latest?
@@ -267,7 +269,7 @@ module Cask
 
     sig { void }
     def audit_latest_with_livecheck
-      return unless cask.version.latest?
+      return unless cask.version&.latest?
       return unless cask.livecheckable?
       return if cask.livecheck.skip?
 
@@ -276,7 +278,7 @@ module Cask
 
     sig { void }
     def audit_latest_with_auto_updates
-      return unless cask.version.latest?
+      return unless cask.version&.latest?
       return unless cask.auto_updates
 
       add_error "Casks with `version :latest` should not use `auto_updates`."
@@ -287,7 +289,8 @@ module Cask
     sig { params(livecheck_result: T.any(NilClass, T::Boolean, Symbol)).void }
     def audit_hosting_with_livecheck(livecheck_result: audit_livecheck_version)
       return if cask.discontinued?
-      return if cask.version.latest?
+      return if cask.version&.latest?
+      return unless cask.url
       return if block_url_offline?
       return if cask.livecheckable?
       return if livecheck_result == :auto_detected
@@ -311,6 +314,7 @@ module Cask
     sig { void }
     def audit_download_url_format
       return unless cask.url
+      return if block_url_offline?
 
       odebug "Auditing URL format"
       if bad_sourceforge_url?
@@ -326,6 +330,7 @@ module Cask
 
     sig { void }
     def audit_unnecessary_verified
+      return unless cask.url
       return if block_url_offline?
       return unless verified_present?
       return unless url_match_homepage?
@@ -338,6 +343,7 @@ module Cask
 
     sig { void }
     def audit_missing_verified
+      return unless cask.url
       return if block_url_offline?
       return if file_url?
       return if url_match_homepage?
@@ -350,6 +356,7 @@ module Cask
 
     sig { void }
     def audit_no_match
+      return unless cask.url
       return if block_url_offline?
       return unless verified_present?
       return if verified_matches_url?
@@ -381,12 +388,15 @@ module Cask
     sig { void }
     def audit_token_conflicts
       return unless token_conflicts?
-      return unless core_formula_names.include?(cask.token)
 
-      add_error(
-        "possible duplicate, cask token conflicts with Homebrew core formula: #{Formatter.url(core_formula_url)}",
-        strict_only: true,
-      )
+      Homebrew.with_no_api_env do
+        return unless core_formula_names.include?(cask.token)
+
+        add_error(
+          "possible duplicate, cask token conflicts with Homebrew core formula: #{Formatter.url(core_formula_url)}",
+          strict_only: true,
+        )
+      end
     end
 
     sig { void }
@@ -448,6 +458,7 @@ module Cask
 
     sig { void }
     def audit_livecheck_unneeded_long_version
+      return if cask.version.nil? || cask.url.nil?
       return if cask.livecheck.strategy != :sparkle
       return unless cask.version.csv.second
       return if cask.url.to_s.include? cask.version.csv.second
@@ -501,6 +512,7 @@ module Cask
     sig { returns(T.any(NilClass, T::Boolean, Symbol)) }
     def audit_livecheck_version
       return unless online?
+      return unless cask.version
 
       referenced_cask, = Homebrew::Livecheck.resolve_livecheck_reference(cask)
 
@@ -714,6 +726,17 @@ module Cask
                                           strict:        strict?)
     end
 
+    sig { void }
+    def audit_cask_path
+      return if cask.tap != "homebrew/cask"
+
+      expected_path = cask.tap.new_cask_path(cask.token)
+
+      return if cask.sourcefile_path.to_s.end_with?(expected_path)
+
+      add_error "Cask should be located in '#{expected_path}'"
+    end
+
     # sig {
     #   params(url_to_check: T.any(String, URL), url_type: String, cask_token: String, tap: Tap,
     #          options: T.untyped).void
@@ -846,7 +869,10 @@ module Cask
 
     sig { returns(String) }
     def core_formula_url
-      "#{core_tap.default_remote}/blob/HEAD/Formula/#{cask.token}.rb"
+      formula_path = Formulary.core_path(cask.token)
+                              .to_s
+                              .delete_prefix(core_tap.path.to_s)
+      "#{core_tap.default_remote}/blob/HEAD/Formula/#{formula_path}"
     end
   end
 end

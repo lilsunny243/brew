@@ -98,6 +98,8 @@ module Homebrew
       return merge(args: args)
     end
 
+    gnu_tar_formula_ensure_installed_if_needed!(only_json_tab: args.only_json_tab?)
+
     args.named.to_resolved_formulae(uniq: false).each do |formula|
       bottle_formula formula, args: args
     end
@@ -234,15 +236,41 @@ module Homebrew
     [].freeze
   end
 
+  sig { params(gnu_tar_formula: Formula).returns(String) }
+  def self.gnu_tar(gnu_tar_formula)
+    "#{gnu_tar_formula.opt_bin}/tar"
+  end
+
   sig { params(mtime: String).returns(T::Array[String]) }
   def self.reproducible_gnutar_args(mtime)
     # Ensure gnu tar is set up for reproducibility.
     # https://reproducible-builds.org/docs/archives/
     [
-      "--format", "pax", "--owner", "0", "--group", "0", "--sort", "name", "--mtime=#{mtime}",
+      # File modification times
+      "--mtime=#{mtime}",
+      # File ordering
+      "--sort=name",
+      # Users, groups and numeric ids
+      "--owner=0", "--group=0", "--numeric-owner",
+      # PAX headers
+      "--format=pax",
       # Set exthdr names to exclude PID (for GNU tar <1.33). Also don't store atime and ctime.
-      "--pax-option", "globexthdr.name=/GlobalHead.%n,exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime"
+      "--pax-option=globexthdr.name=/GlobalHead.%n,exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime"
     ].freeze
+  end
+
+  sig { params(only_json_tab: T::Boolean).returns(T.nilable(Formula)) }
+  def self.gnu_tar_formula_ensure_installed_if_needed!(only_json_tab:)
+    gnu_tar_formula = begin
+      Formula["gnu-tar"]
+    rescue FormulaUnavailableError
+      nil
+    end
+    return if gnu_tar_formula.blank?
+
+    ensure_formula_installed!(gnu_tar_formula, reason: "bottling")
+
+    gnu_tar_formula
   end
 
   sig { params(args: T.untyped, mtime: String).returns([String, T::Array[String]]) }
@@ -251,16 +279,12 @@ module Homebrew
     default_tar_args = ["tar", tar_args].freeze
     return default_tar_args unless args.only_json_tab?
 
-    # Use gnu-tar as it can be set up for reproducibility better than libarchive.
-    begin
-      gnu_tar = Formula["gnu-tar"]
-    rescue FormulaUnavailableError
-      return default_tar_args
-    end
+    # Use gnu-tar as it can be set up for reproducibility better than libarchive
+    # and to be consistent between macOS and Linux.
+    gnu_tar_formula = gnu_tar_formula_ensure_installed_if_needed!(only_json_tab: args.only_json_tab?)
+    return default_tar_args if gnu_tar_formula.blank?
 
-    ensure_formula_installed!(gnu_tar, reason: "bottling")
-
-    ["#{gnu_tar.opt_bin}/gtar", reproducible_gnutar_args(mtime)].freeze
+    [gnu_tar(gnu_tar_formula), reproducible_gnutar_args(mtime)].freeze
   end
 
   def self.formula_ignores(formula)

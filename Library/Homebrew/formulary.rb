@@ -6,6 +6,7 @@ require "extend/cachable"
 require "tab"
 require "utils/bottles"
 require "service"
+require "utils/curl"
 
 require "active_support/core_ext/hash/deep_transform_values"
 
@@ -342,6 +343,7 @@ module Formulary
       def caveats
         self.class.instance_variable_get(:@caveats_string)
             &.gsub(HOMEBREW_PREFIX_PLACEHOLDER, HOMEBREW_PREFIX)
+            &.gsub(HOMEBREW_CELLAR_PLACEHOLDER, HOMEBREW_CELLAR)
             &.gsub(HOMEBREW_HOME_PLACEHOLDER, Dir.home)
       end
 
@@ -590,7 +592,7 @@ module Formulary
       end
       HOMEBREW_CACHE_FORMULA.mkpath
       FileUtils.rm_f(path)
-      curl_download url, to: path
+      Utils::Curl.curl_download url, to: path
       super
     rescue MethodDeprecatedError => e
       if (match_data = url.match(%r{github.com/(?<user>[\w-]+)/(?<repo>[\w-]+)/}).presence)
@@ -626,7 +628,7 @@ module Formulary
           new_tap_user, new_tap_repo, = new_tap_name.split("/")
           new_tap_name = "#{new_tap_user}/#{new_tap_repo}"
           new_tap = Tap.fetch new_tap_name
-          new_tap.install unless new_tap.installed?
+          new_tap.ensure_installed!
           new_tapped_name = "#{new_tap_name}/#{name}"
           name, path = formula_name_path(new_tapped_name, warn: false)
           old_name = tapped_name
@@ -728,9 +730,9 @@ module Formulary
   # * a local bottle reference
   sig {
     params(
-      ref:           T.nilable(T.any(Pathname, String)),
+      ref:           T.any(Pathname, String),
       spec:          Symbol,
-      alias_path:    Pathname,
+      alias_path:    T.any(NilClass, Pathname, String),
       from:          Symbol,
       warn:          T::Boolean,
       force_bottle:  T::Boolean,
@@ -741,15 +743,13 @@ module Formulary
   def self.factory(
     ref,
     spec = :stable,
-    alias_path: T.unsafe(nil),
+    alias_path: nil,
     from: T.unsafe(nil),
     warn: T.unsafe(nil),
     force_bottle: T.unsafe(nil),
     flags: T.unsafe(nil),
     ignore_errors: T.unsafe(nil)
   )
-    raise ArgumentError, "Formulae must have a ref!" unless ref
-
     cache_key = "#{ref}-#{spec}-#{alias_path}-#{from}"
     return cache[:formulary_factory][cache_key] if factory_cached? && cache[:formulary_factory]&.key?(cache_key)
 
@@ -780,7 +780,7 @@ module Formulary
       rack:         Pathname,
       # Automatically resolves the formula's spec if not specified.
       spec:         Symbol,
-      alias_path:   Pathname,
+      alias_path:   T.any(Pathname, String),
       force_bottle: T::Boolean,
       flags:        T::Array[String],
     ).returns(Formula)
@@ -820,7 +820,7 @@ module Formulary
       keg:          Keg,
       # Automatically resolves the formula's spec if not specified.
       spec:         Symbol,
-      alias_path:   Pathname,
+      alias_path:   T.any(Pathname, String),
       force_bottle: T::Boolean,
       flags:        T::Array[String],
     ).returns(Formula)
@@ -857,7 +857,7 @@ module Formulary
       end
     end
     f.build = tab
-    f.build.used_options = Tab.remap_deprecated_options(f.deprecated_options, tab.used_options).as_flags
+    T.cast(f.build, Tab).used_options = Tab.remap_deprecated_options(f.deprecated_options, tab.used_options).as_flags
     f.version.update_commit(keg.version.version.commit) if f.head? && keg.version.head?
     f
   end
@@ -1004,9 +1004,15 @@ module Formulary
     end.select(&:file?)
   end
 
+  sig { params(name: String, tap: Tap).returns(Pathname) }
   def self.find_formula_in_tap(name, tap)
-    filename = "#{name}.rb"
+    filename = if name.end_with?(".rb")
+      name
+    else
+      "#{name}.rb"
+    end
 
-    Tap.formula_files_by_name(tap).fetch(filename, tap.formula_dir/filename)
+    Tap.formula_files_by_name(tap)
+       .fetch(name, tap.formula_dir/filename)
   end
 end

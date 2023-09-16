@@ -23,7 +23,7 @@ module Utils
     HTTP_RESPONSE_BODY_SEPARATOR = "\r\n\r\n"
 
     # This regex is used to isolate the parts of an HTTP status line, namely
-    # the status code and any following descriptive text (e.g., `Not Found`).
+    # the status code and any following descriptive text (e.g. `Not Found`).
     HTTP_STATUS_LINE_REGEX = %r{^HTTP/.* (?<code>\d+)(?: (?<text>[^\r\n]+))?}.freeze
 
     private_constant :ETAG_VALUE_REGEX, :HTTP_RESPONSE_BODY_SEPARATOR, :HTTP_STATUS_LINE_REGEX
@@ -71,7 +71,16 @@ module Utils
       args = []
 
       # do not load .curlrc unless requested (must be the first argument)
-      args << "--disable" unless Homebrew::EnvConfig.curlrc?
+      curlrc = Homebrew::EnvConfig.curlrc
+      if curlrc&.start_with?("/")
+        # If the file exists, we still want to disable loading the default curlrc.
+        args << "--disable" << "--config" << curlrc
+      elsif curlrc
+        # This matches legacy behavior: `HOMEBREW_CURLRC` was a bool,
+        # omitting `--disable` when present.
+      else
+        args << "--disable"
+      end
 
       # echo any cookies received on a redirect
       args << "--cookie" << "/dev/null"
@@ -97,13 +106,13 @@ module Utils
         args << "--fail"
         args << "--progress-bar" unless Context.current.verbose?
         args << "--verbose" if Homebrew::EnvConfig.curl_verbose?
-        args << "--silent" unless $stdout.tty?
+        args << "--silent" if !$stdout.tty? || Context.current.quiet?
       end
 
       args << "--connect-timeout" << connect_timeout.round(3) if connect_timeout.present?
       args << "--max-time" << max_time.round(3) if max_time.present?
 
-      # A non-positive integer (e.g., 0) or `nil` will omit this argument
+      # A non-positive integer (e.g. 0) or `nil` will omit this argument
       args << "--retry" << retries if retries&.positive?
 
       args << "--retry-max-time" << retry_max_time.round if retry_max_time.present?
@@ -600,6 +609,3 @@ module Utils
     end
   end
 end
-
-# FIXME: Include `Utils::Curl` explicitly everywhere it is used.
-include Utils::Curl # rubocop:disable Style/MixinUsage

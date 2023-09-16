@@ -10,7 +10,10 @@ require "English"
 module Homebrew
   # Keep in sync with the `Gemfile.lock`'s BUNDLED WITH.
   # After updating this, run `brew vendor-gems --update=--bundler`.
-  HOMEBREW_BUNDLER_VERSION = "2.3.26"
+  HOMEBREW_BUNDLER_VERSION = "2.4.18"
+
+  GEM_GROUPS_FILE = (HOMEBREW_LIBRARY_PATH/"vendor/bundle/ruby/.homebrew_gem_groups").freeze
+  private_constant :GEM_GROUPS_FILE
 
   module_function
 
@@ -64,6 +67,8 @@ module Homebrew
   def setup_gem_environment!(setup_path: true)
     require "rubygems"
     raise "RubyGems too old!" if Gem::Version.new(Gem::VERSION) < Gem::Version.new("2.2.0")
+
+    ENV["BUNDLER_NO_OLD_RUBYGEMS_WARNING"] = "1"
 
     # Match where our bundler gems are.
     gem_home = "#{HOMEBREW_LIBRARY_PATH}/vendor/bundle/ruby/#{RbConfig::CONFIG["ruby_version"]}"
@@ -149,6 +154,33 @@ module Homebrew
     ENV["BUNDLER_VERSION"] = old_bundler_version
   end
 
+  def user_gem_groups
+    @user_gem_groups ||= if GEM_GROUPS_FILE.exist?
+      GEM_GROUPS_FILE.readlines(chomp: true)
+    else
+      # Backwards compatibility. This else block can be replaced by `[]` by the end of 2023.
+      require "settings"
+      groups = Homebrew::Settings.read(:gemgroups)&.split(";") || []
+      write_user_gem_groups(groups)
+      Homebrew::Settings.delete(:gemgroups)
+      groups
+    end
+  end
+
+  def write_user_gem_groups(groups)
+    GEM_GROUPS_FILE.write(groups.join("\n"))
+  end
+
+  def forget_user_gem_groups!
+    if GEM_GROUPS_FILE.exist?
+      GEM_GROUPS_FILE.truncate(0)
+    else
+      # Backwards compatibility. This else block can be removed by the end of 2023.
+      require "settings"
+      Homebrew::Settings.delete(:gemgroups)
+    end
+  end
+
   def install_bundler_gems!(only_warn_on_failure: false, setup_path: true, groups: [])
     old_path = ENV.fetch("PATH", nil)
     old_gem_path = ENV.fetch("GEM_PATH", nil)
@@ -169,10 +201,15 @@ module Homebrew
 
     install_bundler!
 
-    require "settings"
+    valid_user_gem_groups = user_gem_groups & valid_gem_groups
+    if RUBY_PLATFORM.end_with?("-darwin23")
+      raise "Sorbet is not currently supported under system Ruby on macOS Sonoma." if groups.include?("sorbet")
+
+      valid_user_gem_groups.delete("sorbet")
+    end
 
     # Combine the passed groups with the ones stored in settings
-    groups |= (Homebrew::Settings.read(:gemgroups)&.split(";") || [])
+    groups |= valid_user_gem_groups
     groups.sort!
 
     ENV["BUNDLE_GEMFILE"] = gemfile
@@ -221,7 +258,7 @@ module Homebrew
       end
 
       if bundle_installed
-        Homebrew::Settings.write(:gemgroups, groups.join(";"))
+        write_user_gem_groups(groups)
         @bundle_installed_groups = groups
       end
     end

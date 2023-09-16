@@ -304,9 +304,19 @@ class TapUnavailableError < RuntimeError
   def initialize(name)
     @name = name
 
-    super <<~EOS
-      No available tap #{name}.
-    EOS
+    message = "No available tap #{name}.\n"
+    if [CoreTap.instance.name, CoreCaskTap.instance.name].include?(name)
+      command = "brew tap --force #{name}"
+      message += <<~EOS
+        Run #{Formatter.identifier(command)} to tap #{name}!
+      EOS
+    else
+      command = "brew tap-new #{name}"
+      message += <<~EOS
+        Run #{Formatter.identifier(command)} to create a new #{name} tap!
+      EOS
+    end
+    super message.freeze
   end
 end
 
@@ -334,7 +344,7 @@ end
 class TapCoreRemoteMismatchError < TapRemoteMismatchError
   def message
     <<~EOS
-      Tap #{name} remote does mot match HOMEBREW_CORE_GIT_REMOTE.
+      Tap #{name} remote does not match HOMEBREW_CORE_GIT_REMOTE.
       #{expected_remote} != #{actual_remote}
       Please set HOMEBREW_CORE_GIT_REMOTE="#{actual_remote}" and run `brew update` instead.
     EOS
@@ -469,7 +479,7 @@ class BuildError < RuntimeError
     params(
       formula: T.nilable(Formula),
       cmd:     T.any(String, Pathname),
-      args:    T::Array[T.any(String, Pathname, Integer)],
+      args:    T::Array[T.any(String, Integer, Pathname, Symbol)],
       env:     T::Hash[String, T.untyped],
     ).void
   }

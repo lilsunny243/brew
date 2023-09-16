@@ -116,7 +116,6 @@ module Homebrew
               begin
                 formula.clear_cache if args.force?
 
-                # TODO: Deprecate `--bottle-tag`.
                 bottle_tag = if (bottle_tag = args.bottle_tag&.to_sym)
                   Utils::Bottles::Tag.from_symbol(bottle_tag)
                 else
@@ -166,6 +165,11 @@ module Homebrew
 
           SimulateSystem.with os: os, arch: arch do
             cask = Cask::CaskLoader.load(ref)
+
+            if cask.url.nil? || cask.sha256.nil?
+              opoo "Cask #{cask} is not supported on os #{os} and arch #{arch}"
+              next
+            end
 
             quarantine = args.quarantine?
             quarantine = true if quarantine.nil?
