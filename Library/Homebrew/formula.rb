@@ -489,20 +489,19 @@ class Formula
     name.include?("@")
   end
 
-  # Returns any `@`-versioned formulae names for any formula (including versioned formulae).
+  # Returns any other `@`-versioned formulae names for any formula (including versioned formulae).
   sig { returns(T::Array[String]) }
   def versioned_formulae_names
     versioned_names = if tap
-      name_prefix = "#{name.gsub(/(@[\d.]+)?$/, "")}@"
-      T.must(tap).formula_names.select do |name|
-        name.start_with?(name_prefix)
-      end
+      name_prefix = name.gsub(/(@[\d.]+)?$/, "")
+      T.must(tap).prefix_to_versioned_formulae_names.fetch(name_prefix, [])
     elsif path.exist?
       Pathname.glob(path.to_s.gsub(/(@[\d.]+)?\.rb$/, "@*.rb"))
               .map { |path| path.basename(".rb").to_s }
+              .sort
     else
       raise "Either tap or path is required to list versioned formulae"
-    end.sort
+    end
 
     versioned_names.reject do |versioned_name|
       versioned_name == name
@@ -538,8 +537,7 @@ class Formula
   sig { returns(T::Array[String]) }
   def oldnames
     @oldnames ||= if tap
-      T.must(tap).formula_renames
-       .flat_map { |old_name, new_name| (new_name == name) ? old_name : [] }
+      T.must(tap).formula_oldnames.fetch(name, [])
     else
       []
     end
@@ -2238,7 +2236,7 @@ class Formula
       "versions"                 => {
         "stable" => stable&.version&.to_s,
         "head"   => head&.version&.to_s,
-        "bottle" => !bottle_specification.checksums.empty?,
+        "bottle" => bottle_defined?,
       },
       "urls"                     => {},
       "revision"                 => revision,
@@ -2399,11 +2397,9 @@ class Formula
 
     variations = {}
 
-    os_versions = [*MacOSVersion::SYMBOLS.keys, :linux]
-
-    if path.exist? && (self.class.on_system_blocks_exist? || @on_system_blocks_exist)
+    if path.exist? && on_system_blocks_exist?
       formula_contents = path.read
-      os_versions.product(OnSystem::ARCH_OPTIONS).each do |os, arch|
+      OnSystem::ALL_OS_ARCH_COMBINATIONS.each do |os, arch|
         bottle_tag = Utils::Bottles::Tag.new(system: os, arch: arch)
         next unless bottle_tag.valid_combination?
 
@@ -2437,7 +2433,7 @@ class Formula
       "files"    => {},
     }
     bottle_spec.collector.each_tag do |tag|
-      tag_spec = bottle_spec.collector.specification_for(tag)
+      tag_spec = bottle_spec.collector.specification_for(tag, no_older_versions: true)
       os_cellar = tag_spec.cellar
       os_cellar = os_cellar.inspect if os_cellar.is_a?(Symbol)
 
@@ -2453,6 +2449,11 @@ class Formula
       }
     end
     hash
+  end
+
+  # @private
+  def on_system_blocks_exist?
+    self.class.on_system_blocks_exist? || @on_system_blocks_exist
   end
 
   # @private
