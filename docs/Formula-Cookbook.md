@@ -9,21 +9,21 @@ A *formula* is a package definition written in Ruby. It can be created with `bre
 
 | term                 | description                                                               | example |
 | -------------------- | ------------------------------------------------------------------------- | ------- |
-| **formula**          | Homebrew package definition that builds from upstream sources             | `/usr/local/Homebrew/Library/Taps/homebrew/homebrew-core/Formula/f/foo.rb`
-| **cask**             | Homebrew package definition that installs macOS native applications       | `/usr/local/Homebrew/Library/Taps/homebrew/homebrew-cask/Casks/b/bar.rb`
-| **prefix**           | path in which Homebrew is installed                                       | `/usr/local`
-| **keg**              | installation destination directory of a given **formula** version         | `/usr/local/Cellar/foo/0.1`
-| **rack**             | directory containing one or more versioned **kegs**                       | `/usr/local/Cellar/foo`
-| **keg-only**         | a **formula** is *keg-only* if it is not symlinked into Homebrew's prefix | the [`openjdk`](https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/o/openjdk.rb) formula
-| **opt prefix**       | a symlink to the active version of a **keg**                              | `/usr/local/opt/foo`
-| **Cellar**           | directory containing one or more named **racks**                          | `/usr/local/Cellar`
-| **Caskroom**         | directory containing one or more named **casks**                          | `/usr/local/Caskroom`
-| **external command** | `brew` subcommand defined outside of the Homebrew/brew GitHub repository  | [`brew alias`](https://github.com/Homebrew/homebrew-aliases)
-| **tap**              | directory (and usually Git repository) of **formulae**, **casks** and/or **external commands**       | `/usr/local/Homebrew/Library/Taps/homebrew/homebrew-core`
-| **bottle**           | pre-built **keg** poured into a **rack** of the **Cellar** instead of building from upstream sources | `qt--6.5.1.ventura.bottle.tar.gz`
-| **tab**              | information about a **keg**, e.g. whether it was poured from a **bottle** or built from source       | `/usr/local/Cellar/foo/0.1/INSTALL_RECEIPT.json`
-| **Brew Bundle**      | an [extension of Homebrew](https://github.com/Homebrew/homebrew-bundle) to describe dependencies     | `brew 'myservice', restart_service: true`
-| **Brew Services**    | an [extension of Homebrew](https://github.com/Homebrew/homebrew-services) to manage services         | `brew services start myservice`
+| **formula**          | Homebrew package definition that builds from upstream sources             | `/usr/local/Homebrew/Library/Taps/homebrew/homebrew-core/Formula/f/foo.rb` |
+| **cask**             | Homebrew package definition that installs macOS native applications       | `/usr/local/Homebrew/Library/Taps/homebrew/homebrew-cask/Casks/b/bar.rb` |
+| **prefix**           | path in which Homebrew is installed                                       | `/usr/local` |
+| **keg**              | installation destination directory of a given **formula** version         | `/usr/local/Cellar/foo/0.1` |
+| **rack**             | directory containing one or more versioned **kegs**                       | `/usr/local/Cellar/foo` |
+| **keg-only**         | a **formula** is *keg-only* if it is not symlinked into Homebrew's prefix | the [`openjdk`](https://github.com/Homebrew/homebrew-core/blob/HEAD/Formula/o/openjdk.rb) formula |
+| **opt prefix**       | a symlink to the active version of a **keg**                              | `/usr/local/opt/foo` |
+| **Cellar**           | directory containing one or more named **racks**                          | `/usr/local/Cellar` |
+| **Caskroom**         | directory containing one or more named **casks**                          | `/usr/local/Caskroom` |
+| **external command** | `brew` subcommand defined outside of the Homebrew/brew GitHub repository  | [`brew alias`](https://github.com/Homebrew/homebrew-aliases) |
+| **tap**              | directory (and usually Git repository) of **formulae**, **casks** and/or **external commands**       | `/usr/local/Homebrew/Library/Taps/homebrew/homebrew-core` |
+| **bottle**           | pre-built **keg** poured into a **rack** of the **Cellar** instead of building from upstream sources | `qt--6.5.1.ventura.bottle.tar.gz` |
+| **tab**              | information about a **keg**, e.g. whether it was poured from a **bottle** or built from source       | `/usr/local/Cellar/foo/0.1/INSTALL_RECEIPT.json` |
+| **Brew Bundle**      | an [extension of Homebrew](https://github.com/Homebrew/homebrew-bundle) to describe dependencies     | `brew 'myservice', restart_service: true` |
+| **Brew Services**    | an [extension of Homebrew](https://github.com/Homebrew/homebrew-services) to manage services         | `brew services start myservice` |
 
 ## An introduction
 
@@ -48,7 +48,7 @@ Before submitting a new formula make sure your package:
 * isn't already waiting to be merged (check the [issue tracker](https://github.com/Homebrew/homebrew-core/pulls))
 * is still supported by upstream (i.e. doesn't require extensive patching)
 * has a stable, tagged version (i.e. isn't just a GitHub repository with no versions)
-* passes all `brew audit --new-formula <formula>` tests
+* passes all `brew audit --new --formula <formula>` tests
 
 Before submitting a new formula make sure you read over our [contribution guidelines](https://github.com/Homebrew/brew/blob/HEAD/CONTRIBUTING.md#contributing-to-homebrew).
 
@@ -366,7 +366,7 @@ Add aliases by creating symlinks in an `Aliases` directory in the tap root.
 
 You can run `brew audit --strict --online` to test formulae for adherence to Homebrew house style, which is loosely based on the [Ruby Style Guide](https://github.com/rubocop-hq/ruby-style-guide#the-ruby-style-guide). The `audit` command includes warnings for trailing whitespace, preferred URLs for certain source hosts, and many other style issues. Fixing these warnings before committing will make the process a lot quicker for everyone.
 
-New formulae being submitted to Homebrew should run `brew audit --new-formula foo`. This command is performed by Brew Test Bot on new submissions as part of the automated build and test process, and highlights more potential issues than the standard audit.
+New formulae being submitted to Homebrew should run `brew audit --new --formula foo`. This command is performed by Brew Test Bot on new submissions as part of the automated build and test process, and highlights more potential issues than the standard audit.
 
 Use `brew info` and check if the version guessed by Homebrew from the URL is correct. Add an explicit [`version`](https://rubydoc.brew.sh/Formula#version-class_method) if not.
 
@@ -668,16 +668,16 @@ Homebrew offers these anonymous download strategies.
 
 | `:using` value   | download strategy             |
 | ---------------- | ----------------------------- |
-| `:bzr`           | `BazaarDownloadStrategy`
-| `:curl`          | `CurlDownloadStrategy`
-| `:cvs`           | `CVSDownloadStrategy`
-| `:fossil`        | `FossilDownloadStrategy`
-| `:git`           | `GitDownloadStrategy`
-| `:hg`            | `MercurialDownloadStrategy`
-| `:homebrew_curl` | `HomebrewCurlDownloadStrategy`
-| `:nounzip`       | `NoUnzipCurlDownloadStrategy`
-| `:post`          | `CurlPostDownloadStrategy`
-| `:svn`           | `SubversionDownloadStrategy`
+| `:bzr`           | `BazaarDownloadStrategy` |
+| `:curl`          | `CurlDownloadStrategy` |
+| `:cvs`           | `CVSDownloadStrategy` |
+| `:fossil`        | `FossilDownloadStrategy` |
+| `:git`           | `GitDownloadStrategy` |
+| `:hg`            | `MercurialDownloadStrategy` |
+| `:homebrew_curl` | `HomebrewCurlDownloadStrategy` |
+| `:nounzip`       | `NoUnzipCurlDownloadStrategy` |
+| `:post`          | `CurlPostDownloadStrategy` |
+| `:svn`           | `SubversionDownloadStrategy` |
 
 If you need more control over the way files are downloaded and staged, you can create a custom download strategy and specify it with the `:using` option:
 
@@ -749,32 +749,32 @@ Generally we'd rather you were specific about which files or directories need to
 
 | name                  | default path                                   | example |
 | --------------------- | ---------------------------------------------- | ------- |
-| **`HOMEBREW_PREFIX`** | output of `$(brew --prefix)`                   | `/usr/local`
-| **`prefix`**          | `#{HOMEBREW_PREFIX}/Cellar/#{name}/#{version}` | `/usr/local/Cellar/foo/0.1`
-| **`opt_prefix`**      | `#{HOMEBREW_PREFIX}/opt/#{name}`               | `/usr/local/opt/foo`
-| **`bin`**             | `#{prefix}/bin`                                | `/usr/local/Cellar/foo/0.1/bin`
-| **`doc`**             | `#{prefix}/share/doc/#{name}`                  | `/usr/local/Cellar/foo/0.1/share/doc/foo`
-| **`include`**         | `#{prefix}/include`                            | `/usr/local/Cellar/foo/0.1/include`
-| **`info`**            | `#{prefix}/share/info`                         | `/usr/local/Cellar/foo/0.1/share/info`
-| **`lib`**             | `#{prefix}/lib`                                | `/usr/local/Cellar/foo/0.1/lib`
-| **`libexec`**         | `#{prefix}/libexec`                            | `/usr/local/Cellar/foo/0.1/libexec`
-| **`man`**             | `#{prefix}/share/man`                          | `/usr/local/Cellar/foo/0.1/share/man`
-| **`man[1-8]`**        | `#{prefix}/share/man/man[1-8]`                 | `/usr/local/Cellar/foo/0.1/share/man/man[1-8]`
-| **`sbin`**            | `#{prefix}/sbin`                               | `/usr/local/Cellar/foo/0.1/sbin`
-| **`share`**           | `#{prefix}/share`                              | `/usr/local/Cellar/foo/0.1/share`
-| **`pkgshare`**        | `#{prefix}/share/#{name}`                      | `/usr/local/Cellar/foo/0.1/share/foo`
-| **`elisp`**           | `#{prefix}/share/emacs/site-lisp/#{name}`      | `/usr/local/Cellar/foo/0.1/share/emacs/site-lisp/foo`
-| **`frameworks`**      | `#{prefix}/Frameworks`                         | `/usr/local/Cellar/foo/0.1/Frameworks`
-| **`kext_prefix`**     | `#{prefix}/Library/Extensions`                 | `/usr/local/Cellar/foo/0.1/Library/Extensions`
-| **`zsh_function`**    | `#{prefix}/share/zsh/site-functions`           | `/usr/local/Cellar/foo/0.1/share/zsh/site-functions`
-| **`fish_function`**   | `#{prefix}/share/fish/vendor_functions`        | `/usr/local/Cellar/foo/0.1/share/fish/vendor_functions`
-| **`bash_completion`** | `#{prefix}/etc/bash_completion.d`              | `/usr/local/Cellar/foo/0.1/etc/bash_completion.d`
-| **`zsh_completion`**  | `#{prefix}/share/zsh/site-functions`           | `/usr/local/Cellar/foo/0.1/share/zsh/site-functions`
-| **`fish_completion`** | `#{prefix}/share/fish/vendor_completions.d`    | `/usr/local/Cellar/foo/0.1/share/fish/vendor_completions.d`
-| **`etc`**             | `#{HOMEBREW_PREFIX}/etc`                       | `/usr/local/etc`
-| **`pkgetc`**          | `#{HOMEBREW_PREFIX}/etc/#{name}`               | `/usr/local/etc/foo`
-| **`var`**             | `#{HOMEBREW_PREFIX}/var`                       | `/usr/local/var`
-| **`buildpath`**       | temporary directory somewhere on your system | `/private/tmp/[formula-name]-0q2b/[formula-name]`
+| **`HOMEBREW_PREFIX`** | output of `$(brew --prefix)`                   | `/usr/local` |
+| **`prefix`**          | `#{HOMEBREW_PREFIX}/Cellar/#{name}/#{version}` | `/usr/local/Cellar/foo/0.1` |
+| **`opt_prefix`**      | `#{HOMEBREW_PREFIX}/opt/#{name}`               | `/usr/local/opt/foo` |
+| **`bin`**             | `#{prefix}/bin`                                | `/usr/local/Cellar/foo/0.1/bin` |
+| **`doc`**             | `#{prefix}/share/doc/#{name}`                  | `/usr/local/Cellar/foo/0.1/share/doc/foo` |
+| **`include`**         | `#{prefix}/include`                            | `/usr/local/Cellar/foo/0.1/include` |
+| **`info`**            | `#{prefix}/share/info`                         | `/usr/local/Cellar/foo/0.1/share/info` |
+| **`lib`**             | `#{prefix}/lib`                                | `/usr/local/Cellar/foo/0.1/lib` |
+| **`libexec`**         | `#{prefix}/libexec`                            | `/usr/local/Cellar/foo/0.1/libexec` |
+| **`man`**             | `#{prefix}/share/man`                          | `/usr/local/Cellar/foo/0.1/share/man` |
+| **`man[1-8]`**        | `#{prefix}/share/man/man[1-8]`                 | `/usr/local/Cellar/foo/0.1/share/man/man[1-8]` |
+| **`sbin`**            | `#{prefix}/sbin`                               | `/usr/local/Cellar/foo/0.1/sbin` |
+| **`share`**           | `#{prefix}/share`                              | `/usr/local/Cellar/foo/0.1/share` |
+| **`pkgshare`**        | `#{prefix}/share/#{name}`                      | `/usr/local/Cellar/foo/0.1/share/foo` |
+| **`elisp`**           | `#{prefix}/share/emacs/site-lisp/#{name}`      | `/usr/local/Cellar/foo/0.1/share/emacs/site-lisp/foo` |
+| **`frameworks`**      | `#{prefix}/Frameworks`                         | `/usr/local/Cellar/foo/0.1/Frameworks` |
+| **`kext_prefix`**     | `#{prefix}/Library/Extensions`                 | `/usr/local/Cellar/foo/0.1/Library/Extensions` |
+| **`zsh_function`**    | `#{prefix}/share/zsh/site-functions`           | `/usr/local/Cellar/foo/0.1/share/zsh/site-functions` |
+| **`fish_function`**   | `#{prefix}/share/fish/vendor_functions`        | `/usr/local/Cellar/foo/0.1/share/fish/vendor_functions` |
+| **`bash_completion`** | `#{prefix}/etc/bash_completion.d`              | `/usr/local/Cellar/foo/0.1/etc/bash_completion.d` |
+| **`zsh_completion`**  | `#{prefix}/share/zsh/site-functions`           | `/usr/local/Cellar/foo/0.1/share/zsh/site-functions` |
+| **`fish_completion`** | `#{prefix}/share/fish/vendor_completions.d`    | `/usr/local/Cellar/foo/0.1/share/fish/vendor_completions.d` |
+| **`etc`**             | `#{HOMEBREW_PREFIX}/etc`                       | `/usr/local/etc` |
+| **`pkgetc`**          | `#{HOMEBREW_PREFIX}/etc/#{name}`               | `/usr/local/etc/foo` |
+| **`var`**             | `#{HOMEBREW_PREFIX}/var`                       | `/usr/local/var` |
+| **`buildpath`**       | temporary directory somewhere on your system | `/private/tmp/[formula-name]-0q2b/[formula-name]` |
 
 These can be used, for instance, in code such as:
 
@@ -937,24 +937,24 @@ This table lists the options you can set within a `service` block. The `run` or 
 
 | method                  | default      | macOS | Linux | description |
 | ----------------------- | ------------ | :---: | :---: | ----------- |
-| `run`                   | -            |  yes  |  yes  | command to execute: an array with arguments or a path
-| `run_type`              | `:immediate` |  yes  |  yes  | type of service: `:immediate`, `:interval` or `:cron`
-| `interval`              | -            |  yes  |  yes  | controls the start interval, required for the `:interval` type
-| `cron`                  | -            |  yes  |  yes  | controls the trigger times, required for the `:cron` type
-| `keep_alive`            | `false`      |  yes  |  yes  | [sets contexts](#keep_alive-options) in which the service will keep the process running
-| `launch_only_once`      | `false`      |  yes  |  yes  | whether the command should only run once
-| `require_root`          | `false`      |  yes  |  yes  | whether the service requires root access
-| `environment_variables` | -            |  yes  |  yes  | hash of variables to set
-| `working_dir`           | -            |  yes  |  yes  | directory to operate from
-| `root_dir`              | -            |  yes  |  yes  | directory to use as a chroot for the process
-| `input_path`            | -            |  yes  |  yes  | path to use as input for the process
-| `log_path`              | -            |  yes  |  yes  | path to write `stdout` to
-| `error_log_path`        | -            |  yes  |  yes  | path to write `stderr` to
-| `restart_delay`         | -            |  yes  |  yes  | number of seconds to delay before restarting a process
-| `process_type`          | -            |  yes  | no-op | type of process to manage: `:background`, `:standard`, `:interactive` or `:adaptive`
-| `macos_legacy_timers`   | -            |  yes  | no-op | timers created by `launchd` jobs are coalesced unless this is set
-| `sockets`               | -            |  yes  | no-op | socket that is created as an accesspoint to the service
-| `name`                  | -            |  yes  |  yes  | a hash with the `launchd` service name on macOS and/or the `systemd` service name on Linux
+| `run`                   | -            |  yes  |  yes  | command to execute: an array with arguments or a path |
+| `run_type`              | `:immediate` |  yes  |  yes  | type of service: `:immediate`, `:interval` or `:cron` |
+| `interval`              | -            |  yes  |  yes  | controls the start interval, required for the `:interval` type |
+| `cron`                  | -            |  yes  |  yes  | controls the trigger times, required for the `:cron` type |
+| `keep_alive`            | `false`      |  yes  |  yes  | [sets contexts](#keep_alive-options) in which the service will keep the process running |
+| `launch_only_once`      | `false`      |  yes  |  yes  | whether the command should only run once |
+| `require_root`          | `false`      |  yes  |  yes  | whether the service requires root access |
+| `environment_variables` | -            |  yes  |  yes  | hash of variables to set |
+| `working_dir`           | -            |  yes  |  yes  | directory to operate from |
+| `root_dir`              | -            |  yes  |  yes  | directory to use as a chroot for the process |
+| `input_path`            | -            |  yes  |  yes  | path to use as input for the process |
+| `log_path`              | -            |  yes  |  yes  | path to write `stdout` to |
+| `error_log_path`        | -            |  yes  |  yes  | path to write `stderr` to |
+| `restart_delay`         | -            |  yes  |  yes  | number of seconds to delay before restarting a process |
+| `process_type`          | -            |  yes  | no-op | type of process to manage: `:background`, `:standard`, `:interactive` or `:adaptive` |
+| `macos_legacy_timers`   | -            |  yes  | no-op | timers created by `launchd` jobs are coalesced unless this is set |
+| `sockets`               | -            |  yes  | no-op | socket that is created as an accesspoint to the service |
+| `name`                  | -            |  yes  |  yes  | a hash with the `launchd` service name on macOS and/or the `systemd` service name on Linux |
 
 For services that are kept alive after starting you can use the default `run_type`:
 
@@ -1051,6 +1051,24 @@ The `sockets` method accepts a formatted socket definition as `<type>://<host>:<
 * `port`: port number the socket should listen on
 
 Please note that sockets will be accessible on IPv4 and IPv6 addresses by default.
+
+If you only need one socket and you don't care about the name (the default is `listeners`):
+
+```rb
+service do
+  run [opt_bin/"beanstalkd", "test"]
+  sockets "tcp://127.0.0.1:80"
+end
+```
+
+If you need multiple sockets and/or you want to specify the name:
+
+```rb
+service do
+  run [opt_bin/"beanstalkd", "test"]
+  sockets http: "tcp://0.0.0.0:80", https: "tcp://0.0.0.0:443"
+end
+```
 
 ### Using environment variables
 

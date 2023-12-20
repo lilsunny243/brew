@@ -44,10 +44,20 @@ module Homebrew
       switch "--eval-all",
              description: "Evaluate all available formulae and casks, whether installed or not, to audit them. " \
                           "Implied if `HOMEBREW_EVAL_ALL` is set."
-      switch "--new", "--new-formula", "--new-cask",
+      switch "--new",
              description: "Run various additional style checks to determine if a new formula or cask is eligible " \
-                          "for Homebrew. This should be used when creating new formula and implies " \
+                          "for Homebrew. This should be used when creating new formulae or casks and implies " \
                           "`--strict` and `--online`."
+      switch "--new-formula",
+             replacement: "--new",
+             # odeprecated: change this to true on disable and remove `args.new_formula?` calls
+             disable:     false,
+             hidden:      true
+      switch "--new-cask",
+             replacement: "--new",
+             # odeprecated: change this to true on disable and remove `args.new_formula?` calls
+             disable:     false,
+             hidden:      true
       switch "--[no-]signing",
              description: "Audit for signed apps, which are required on ARM"
       switch "--token-conflicts",
@@ -62,9 +72,6 @@ module Homebrew
       switch "--display-filename",
              description: "Prefix every line of output with the file or formula name being audited, to " \
                           "make output easy to grep."
-      switch "--display-failures-only",
-             description: "Only display casks that fail the audit. This is the default for formulae and casks.",
-             hidden:      true
       switch "--skip-style",
              description: "Skip running non-RuboCop style checks. Useful if you plan on running " \
                           "`brew style` separately. Enabled by default unless a formula is specified by name."
@@ -101,6 +108,9 @@ module Homebrew
   def self.audit
     args = audit_args.parse
 
+    new_cask = args.new? || args.new_cask?
+    new_formula = args.new? || args.new_formula?
+
     Formulary.enable_factory_cache!
 
     os_arch_combinations = args.os_arch_combinations
@@ -108,7 +118,6 @@ module Homebrew
     Homebrew.auditing = true
     inject_dump_stats!(FormulaAuditor, /^audit_/) if args.audit_debug?
 
-    new_formula = args.new_formula?
     strict = new_formula || args.strict?
     online = new_formula || args.online?
     tap_audit = args.tap.present?
@@ -139,6 +148,8 @@ module Homebrew
         [Formula.all(eval_all: args.eval_all?), Cask::Cask.all]
       else
         if args.named.any? { |named_arg| named_arg.end_with?(".rb") }
+          # This odisabled should probably stick around indefinitely,
+          # until at least we have a way to exclude error on these in the CLI parser.
           odisabled "brew audit [path ...]",
                     "brew audit [name ...]"
         end
@@ -153,6 +164,10 @@ module Homebrew
       return
     end
 
+    gem_groups = ["audit"]
+    gem_groups << "style" unless skip_style
+    Homebrew.install_bundler_gems!(groups: gem_groups)
+
     style_files = args.named.to_paths unless skip_style
 
     only_cops = args.only_cops
@@ -161,7 +176,7 @@ module Homebrew
 
     if only_cops
       style_options[:only_cops] = only_cops
-    elsif args.new_formula?
+    elsif new_formula || new_cask
       nil
     elsif except_cops
       style_options[:except_cops] = except_cops
@@ -229,13 +244,7 @@ module Homebrew
       problems[[f.full_name, path]] = errors if errors.any?
     end
 
-    if audit_casks.any?
-      require "cask/auditor"
-
-      if args.display_failures_only?
-        odisabled "`brew audit <cask> --display-failures-only`", "`brew audit <cask>` without the argument"
-      end
-    end
+    require "cask/auditor" if audit_casks.any?
 
     cask_problems = audit_casks.each_with_object({}) do |cask, problems|
       path = cask.sourcefile_path
@@ -251,14 +260,14 @@ module Homebrew
             # For switches, we add `|| nil` so that `nil` will be passed
             # instead of `false` if they aren't set.
             # This way, we can distinguish between "not set" and "set to false".
-            audit_online:          (args.online? || nil),
-            audit_strict:          (args.strict? || nil),
+            audit_online:          args.online? || nil,
+            audit_strict:          args.strict? || nil,
 
             # No need for `|| nil` for `--[no-]signing`
             # because boolean switches are already `nil` if not passed
             audit_signing:         args.signing?,
-            audit_new_cask:        (args.new_cask? || nil),
-            audit_token_conflicts: (args.token_conflicts? || nil),
+            audit_new_cask:        new_cask || nil,
+            audit_token_conflicts: args.token_conflicts? || nil,
             quarantine:            true,
             any_named_args:        !no_named_args,
             only:                  args.only,
@@ -341,9 +350,11 @@ module Homebrew
   end
 
   def self.format_problem_lines(problems)
-    problems.map do |message:, location:, corrected:|
-      status = " #{Formatter.success("[corrected]")}" if corrected
+    problems.map do |problem|
+      status = " #{Formatter.success("[corrected]")}" if problem.fetch(:corrected)
+      location = problem.fetch(:location)
       location = "#{location.line&.to_s&.prepend("line ")}#{location.column&.to_s&.prepend(", col ")}: " if location
+      message = problem.fetch(:message)
       "* #{location}#{message.chomp.gsub("\n", "\n    ")}#{status}"
     end
   end

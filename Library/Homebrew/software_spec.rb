@@ -204,14 +204,16 @@ class SoftwareSpec
 
   # @deprecated
   def uses_from_macos_elements
-    # TODO: remove all @uses_from_macos_elements when disabling or removing this method
-    odeprecated "#uses_from_macos_elements", "#declared_deps"
+    # TODO: remove all @uses_from_macos_elements when removing this method
+    # Also remember to remove the delegate from formula.rb
+    odisabled "#uses_from_macos_elements", "#declared_deps"
     @uses_from_macos_elements
   end
 
   # @deprecated
   def uses_from_macos_names
-    odeprecated "#uses_from_macos_names", "#declared_deps"
+    # TODO: Remember to remove the delegate from formula.rb
+    odisabled "#uses_from_macos_names", "#declared_deps"
     uses_from_macos_elements.flat_map { |e| e.is_a?(Hash) ? e.keys : e }
   end
 
@@ -535,6 +537,12 @@ class BottleSpecification
     end
   end
 
+  def ==(other)
+    self.class == other.class && rebuild == other.rebuild && collector == other.collector &&
+      root_url == other.root_url && root_url_specs == other.root_url_specs && tap == other.tap
+  end
+  alias eql? ==
+
   sig { params(tag: Utils::Bottles::Tag).returns(T.any(Symbol, String)) }
   def tag_to_cellar(tag = Utils::Bottles.tag)
     spec = collector.specification_for(tag)
@@ -551,7 +559,7 @@ class BottleSpecification
 
     return true if RELOCATABLE_CELLARS.include?(cellar)
 
-    prefix = Pathname(cellar).parent.to_s
+    prefix = Pathname(cellar.to_s).parent.to_s
 
     cellar_relocatable = cellar.size >= HOMEBREW_CELLAR.to_s.size && ENV["HOMEBREW_RELOCATE_BUILD_PREFIX"].present?
     prefix_relocatable = prefix.size >= HOMEBREW_PREFIX.to_s.size && ENV["HOMEBREW_RELOCATE_BUILD_PREFIX"].present?

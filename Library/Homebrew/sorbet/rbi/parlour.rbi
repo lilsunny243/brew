@@ -111,12 +111,6 @@ class Formula
   def compiler_failures(*args, **options, &block); end
 
   sig { params(args: T.untyped, options: T.untyped, block: T.untyped).returns(T.untyped) }
-  def plist_manual(*args, **options, &block); end
-
-  sig { params(args: T.untyped, options: T.untyped, block: T.untyped).returns(T.untyped) }
-  def plist_startup(*args, **options, &block); end
-
-  sig { params(args: T.untyped, options: T.untyped, block: T.untyped).returns(T.untyped) }
   def pour_bottle_check_unsatisfied_reason(*args, **options, &block); end
 
   sig { params(args: T.untyped, options: T.untyped, block: T.untyped).returns(T.untyped) }
@@ -287,12 +281,6 @@ class SystemCommand
   def sudo_as_root?; end
 
   sig { returns(T::Boolean) }
-  def print_stdout?; end
-
-  sig { returns(T::Boolean) }
-  def print_stderr?; end
-
-  sig { returns(T::Boolean) }
   def must_succeed?; end
 end
 
@@ -374,6 +362,15 @@ module Cask
 
     sig { returns(T::Boolean) }
     def on_system_blocks_exist?; end
+
+    sig { returns(T::Boolean) }
+    def deprecated?; end
+
+    sig { returns(T::Boolean) }
+    def disabled?; end
+
+    sig { returns(T::Boolean) }
+    def livecheckable?; end
   end
 end
 

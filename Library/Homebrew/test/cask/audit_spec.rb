@@ -307,7 +307,7 @@ describe Cask::Audit, :cask do
         let(:cask_token) { "token-beta" }
 
         it "fails if the cask is from an official tap" do
-          allow(cask).to receive(:tap).and_return(Tap.fetch("homebrew/cask"))
+          allow(cask).to receive(:tap).and_return(CoreCaskTap.instance)
 
           expect(run).to error_with(/token contains version designation/)
         end
@@ -369,7 +369,7 @@ describe Cask::Audit, :cask do
 
       context "when cask token is in tap_migrations.json and" do
         let(:cask_token) { "token-migrated" }
-        let(:tap) { Tap.fetch("homebrew/cask") }
+        let(:tap) { CoreCaskTap.instance }
 
         before do
           allow(tap).to receive(:tap_migrations).and_return({ cask_token => "homebrew/core" })
@@ -471,8 +471,7 @@ describe Cask::Audit, :cask do
       let(:unpack_double) { instance_double(UnpackStrategy::Zip) }
 
       before do
-        allow(audit).to receive(:download).and_return(download_double)
-        allow(audit).to receive(:signing?).and_return(true)
+        allow(audit).to receive_messages(download: download_double, signing?: true)
         allow(audit).to receive(:check_https_availability)
       end
 
@@ -530,14 +529,26 @@ describe Cask::Audit, :cask do
         it { is_expected.not_to error_with(message) }
       end
 
-      context "when the Cask is discontinued" do
-        let(:cask_token) { "livecheck/livecheck-discontinued" }
+      context "when the Cask is deprecated" do
+        let(:cask_token) { "livecheck/livecheck-deprecated" }
 
         it { is_expected.not_to error_with(message) }
       end
 
-      context "when the Cask has a livecheck block referencing a discontinued Cask" do
-        let(:cask_token) { "livecheck/livecheck-discontinued-reference" }
+      context "when the Cask has a livecheck block referencing a deprecated Cask" do
+        let(:cask_token) { "livecheck/livecheck-deprecated-reference" }
+
+        it { is_expected.not_to error_with(message) }
+      end
+
+      context "when the Cask is disabled" do
+        let(:cask_token) { "livecheck/livecheck-disabled" }
+
+        it { is_expected.not_to error_with(message) }
+      end
+
+      context "when the Cask has a livecheck block referencing a disabled Cask" do
+        let(:cask_token) { "livecheck/livecheck-disabled-reference" }
 
         it { is_expected.not_to error_with(message) }
       end

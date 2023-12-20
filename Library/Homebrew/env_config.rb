@@ -223,7 +223,7 @@ module Homebrew
         description: "Use this personal access token for the GitHub API, for features such as " \
                      "`brew search`. You can create one at <https://github.com/settings/tokens>. If set, " \
                      "GitHub will allow you a greater number of API requests. For more information, see: " \
-                     "<https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting>" \
+                     "<https://docs.github.com/en/rest/overview/rate-limits-for-the-rest-api>" \
                      "\n\n    *Note:* Homebrew doesn't require permissions for any of the scopes, but some " \
                      "developer commands may require additional permissions.",
       },
@@ -371,6 +371,11 @@ module Homebrew
       HOMEBREW_SYSTEM_ENV_TAKES_PRIORITY:        {
         description: "If set in Homebrew's system-wide environment file (`/etc/homebrew/brew.env`), " \
                      "the system-wide environment file will be loaded last to override any prefix or user settings.",
+        boolean:     true,
+      },
+      HOMEBREW_SUDO_THROUGH_SUDO_USER:           {
+        description: "If set, Homebrew will use the `SUDO_USER` environment variable to define the user to " \
+                     "`sudo`(8) through when running `sudo`(8).",
         boolean:     true,
       },
       HOMEBREW_TEMP:                             {

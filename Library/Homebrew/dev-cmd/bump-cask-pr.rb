@@ -67,10 +67,14 @@ module Homebrew
   def bump_cask_pr
     args = bump_cask_pr_args.parse
 
-    # odeprecated "brew bump-cask-pr --online" if args.online?
+    odeprecated "brew bump-cask-pr --online" if args.online?
+
     # This will be run by `brew audit` or `brew style` later so run it first to
     # not start spamming during normal output.
-    Homebrew.install_bundler_gems!(groups: ["style"]) if !args.no_audit? || !args.no_style?
+    gem_groups = []
+    gem_groups << "style" if !args.no_audit? || !args.no_style?
+    gem_groups << "audit" unless args.no_audit?
+    Homebrew.install_bundler_gems!(groups: gem_groups) unless gem_groups.empty?
 
     # As this command is simplifying user-run commands then let's just use a
     # user path, too.
@@ -116,22 +120,6 @@ module Homebrew
     branch_name = "bump-#{cask.token}"
     commit_message = nil
 
-    if new_version.present?
-      # For simplicity, our naming defers to the arm version if we multiple architectures are specified
-      branch_version = new_version.arm || new_version.general
-      if branch_version.is_a?(Cask::DSL::Version)
-        commit_version = if branch_version.before_comma == cask.version.before_comma
-          branch_version
-        else
-          branch_version.before_comma
-        end
-        branch_name = "bump-#{cask.token}-#{branch_version.tr(",:", "-")}"
-        commit_message ||= "#{cask.token} #{commit_version}"
-      end
-      replacement_pairs = replace_version_and_checksum(cask, new_hash, new_version, replacement_pairs)
-    end
-    # Now that we have all replacement pairs, we will replace them further down
-
     old_contents = File.read(cask.sourcefile_path)
 
     if new_base_url
@@ -147,6 +135,18 @@ module Homebrew
         new_base_url.to_s,
       ]
     end
+
+    if new_version.present?
+      # For simplicity, our naming defers to the arm version if we multiple architectures are specified
+      branch_version = new_version.arm || new_version.general
+      if branch_version.is_a?(Cask::DSL::Version)
+        commit_version = shortened_version(branch_version, cask: cask)
+        branch_name = "bump-#{cask.token}-#{branch_version.tr(",:", "-")}"
+        commit_message ||= "#{cask.token} #{commit_version}"
+      end
+      replacement_pairs = replace_version_and_checksum(cask, new_hash, new_version, replacement_pairs)
+    end
+    # Now that we have all replacement pairs, we will replace them further down
 
     commit_message ||= "#{cask.token}: update checksum" if new_hash
 
@@ -171,10 +171,19 @@ module Homebrew
     GitHub.create_bump_pr(pr_info, args: args)
   end
 
+  sig { params(version: Cask::DSL::Version, cask: Cask::Cask).returns(Cask::DSL::Version) }
+  def shortened_version(version, cask:)
+    if version.before_comma == cask.version.before_comma
+      version
+    else
+      version.before_comma
+    end
+  end
+
   sig {
     params(
       cask:              Cask::Cask,
-      new_hash:          T.nilable(String),
+      new_hash:          T.any(NilClass, String, Symbol),
       new_version:       BumpVersionParser,
       replacement_pairs: T::Array[[T.any(Regexp, String), T.any(Regexp, String)]],
     ).returns(T::Array[[T.any(Regexp, String), T.any(Regexp, String)]])
@@ -205,10 +214,10 @@ module Homebrew
           replacement_pairs << [/"#{old_hash}"/, ":no_check"] if old_hash != :no_check
         elsif old_hash == :no_check && new_hash != :no_check
           replacement_pairs << [":no_check", "\"#{new_hash}\""] if new_hash.is_a?(String)
+        elsif new_hash && !cask.on_system_blocks_exist? && cask.languages.empty?
+          replacement_pairs << [old_hash.to_s, new_hash.to_s]
         elsif old_hash != :no_check
-          if new_hash && cask.languages.present?
-            opoo "Multiple checksum replacements required; ignoring specified `--sha256` argument."
-          end
+          opoo "Multiple checksum replacements required; ignoring specified `--sha256` argument." if new_hash
           languages = if cask.languages.empty?
             [nil]
           else
@@ -229,9 +238,6 @@ module Homebrew
                                     download.sha256]
             end
           end
-        elsif new_hash
-          opoo "Cask contains multiple hashes; only updating hash for current arch." if cask.on_system_blocks_exist?
-          replacement_pairs << [old_hash.to_s, new_hash]
         end
       end
     end
@@ -257,7 +263,7 @@ module Homebrew
         cask.token,
         tap_remote_repo,
         state:   "closed",
-        version: version,
+        version: shortened_version(version, cask: cask),
         file:    cask.sourcefile_path.relative_path_from(cask.tap.path).to_s,
         args:    args,
       )

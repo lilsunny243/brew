@@ -122,6 +122,9 @@ module Homebrew
     end
 
     cask_path.atomic_write <<~RUBY
+      # Documentation: https://docs.brew.sh/Cask-Cookbook
+      #                https://docs.brew.sh/Adding-Software-to-Homebrew#cask-stanzas
+      # PLEASE REMOVE ALL GENERATED COMMENTS BEFORE SUBMITTING YOUR PULL REQUEST!
       cask "#{token}" do
         version "#{version}"
         sha256 "#{sha256}"
@@ -131,7 +134,18 @@ module Homebrew
         desc ""
         homepage ""
 
+        # Documentation: https://docs.brew.sh/Brew-Livecheck
+        livecheck do
+          url ""
+          strategy ""
+        end
+
+        depends_on macos: ""
+
         app ""
+
+        # Documentation: https://docs.brew.sh/Cask-Cookbook#stanza-zap
+        zap trash: ""
       end
     RUBY
 
@@ -140,22 +154,7 @@ module Homebrew
   end
 
   def create_formula(args:)
-    fc = FormulaCreator.new(args)
-    fc.name = if args.set_name.blank?
-      stem = Pathname.new(args.named.first).stem.rpartition("=").last
-      print "Formula name [#{stem}]: "
-      __gets || stem
-    else
-      args.set_name
-    end
-    fc.version = args.set_version
-    fc.license = args.set_license
-    fc.tap = Tap.fetch(args.tap || "homebrew/core")
-    raise TapUnavailableError, fc.tap.name unless fc.tap.installed?
-
-    fc.url = args.named.first
-
-    fc.mode = if args.autotools?
+    mode = if args.autotools?
       :autotools
     elsif args.cmake?
       :cmake
@@ -176,6 +175,25 @@ module Homebrew
     elsif args.rust?
       :rust
     end
+
+    fc = FormulaCreator.new(
+      args.set_name,
+      args.set_version,
+      tap:     args.tap,
+      url:     args.named.first,
+      mode:    mode,
+      license: args.set_license,
+      fetch:   !args.no_fetch?,
+      head:    args.HEAD?,
+    )
+    fc.parse_url
+    # ask for confirmation if name wasn't passed explicitly
+    if args.set_name.blank?
+      print "Formula name [#{fc.name}]: "
+      fc.name = __gets || fc.name
+    end
+
+    fc.verify
 
     # Check for disallowed formula, or names that shadow aliases,
     # unless --force is specified.
@@ -200,7 +218,7 @@ module Homebrew
       end
     end
 
-    fc.generate!
+    path = fc.write_formula!
 
     formula = Homebrew.with_no_api_env do
       Formula[fc.name]
@@ -208,7 +226,7 @@ module Homebrew
     PyPI.update_python_resources! formula, ignore_non_pypi_packages: true if args.python?
 
     puts "Please run `brew audit --new #{fc.name}` before submitting, thanks."
-    fc.path
+    path
   end
 
   def __gets

@@ -12,8 +12,8 @@ class GitHubPackages
   include Context
 
   URL_DOMAIN = "ghcr.io"
-  URL_PREFIX = "https://#{URL_DOMAIN}/v2/"
-  DOCKER_PREFIX = "docker://#{URL_DOMAIN}/"
+  URL_PREFIX = "https://#{URL_DOMAIN}/v2/".freeze
+  DOCKER_PREFIX = "docker://#{URL_DOMAIN}/".freeze
   public_constant :URL_DOMAIN
   private_constant :URL_PREFIX
   private_constant :DOCKER_PREFIX
@@ -124,8 +124,8 @@ class GitHubPackages
   def self.image_version_rebuild(version_rebuild)
     return version_rebuild if version_rebuild.match?(VALID_OCI_TAG_REGEX)
 
-    # odeprecated "GitHub Packages versions that do not match #{VALID_OCI_TAG_REGEX.source}",
-    #             "declaring a new `version` without these characters"
+    odeprecated "GitHub Packages versions that do not match #{VALID_OCI_TAG_REGEX.source}",
+                "declaring a new `version` without these characters"
     version_rebuild.gsub(INVALID_OCI_TAG_CHARS_REGEX, ".")
   end
 

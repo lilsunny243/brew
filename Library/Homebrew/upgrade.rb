@@ -72,17 +72,36 @@ module Homebrew
           unless dry_run
             fi.prelude
 
-            # Don't need to install this bottle if all the runtime dependencies
-            # are already satisfied.
-            next if dependents && fi.bottle_tab_runtime_dependencies.presence&.none? do |dependency, hash|
-              installed_version = begin
-                Formula[dependency].any_installed_version
+            # Don't need to install this bottle if all of the runtime
+            # dependencies have the same or newer version already installed.
+            next if dependents && fi.bottle_tab_runtime_dependencies.presence&.all? do |dependency, hash|
+              dependency_formula = begin
+                Formula[dependency]
               rescue FormulaUnavailableError
                 nil
               end
-              next true unless installed_version
+              next false if dependency_formula.nil?
 
-              Version.new(hash["version"]) > installed_version.version
+              next true if dependency_formula.latest_version_installed?
+
+              installed_version = dependency_formula.any_installed_version
+              next false unless installed_version
+
+              next false if hash["version"].blank?
+
+              # Tabs prior to 4.1.18 did not have revision or pkg_version fields.
+              # As a result, we have to be more conversative when we do not have
+              # a revision in the tab and assume that if the formula has a
+              # the same version and a non-zero revision that it needs upgraded.
+              tab_version = Version.new(hash["version"])
+              if hash["revision"].present?
+                tab_pkg_version = PkgVersion.new(tab_version, hash["revision"])
+                installed_version >= tab_pkg_version
+              elsif installed_version.version == tab_version
+                dependency_formula.revision.zero?
+              else
+                installed_version.version > tab_version
+              end
             end
 
             fi.fetch
@@ -318,7 +337,7 @@ module Homebrew
 
       if pinned_dependents.present?
         plural = Utils.pluralize("dependent", pinned_dependents.count)
-        ohai "Not upgrading #{pinned_dependents.count} pinned #{plural}:"
+        opoo "Not upgrading #{pinned_dependents.count} pinned #{plural}:"
         puts(pinned_dependents.map do |f|
           "#{f.full_specified_name} #{f.pkg_version}"
         end.join(", "))
@@ -443,8 +462,8 @@ module Homebrew
 
     def depends_on(one, two)
       if one.any_installed_keg
-         &.runtime_dependencies
-         &.any? { |dependency| dependency["full_name"] == two.full_name }
+            &.runtime_dependencies
+            &.any? { |dependency| dependency["full_name"] == two.full_name }
         1
       else
         one <=> two

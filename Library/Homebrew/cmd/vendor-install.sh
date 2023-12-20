@@ -3,7 +3,7 @@
 #:
 #:  Install Homebrew's portable Ruby.
 
-# HOMEBREW_CURLRC, HOMEBREW_LIBRARY, HOMEBREW_STDERR is from the user environment
+# HOMEBREW_CURLRC, HOMEBREW_LIBRARY is from the user environment
 # HOMEBREW_CACHE, HOMEBREW_CURL, HOMEBREW_LINUX, HOMEBREW_LINUX_MINIMUM_GLIBC_VERSION, HOMEBREW_MACOS,
 # HOMEBREW_MACOS_VERSION_NUMERIC and HOMEBREW_PROCESSOR are set by brew.sh
 # shellcheck disable=SC2154
@@ -20,19 +20,19 @@ then
      # use a x86_64 Portable Ruby.
      [[ "${HOMEBREW_PHYSICAL_PROCESSOR}" == "arm64" && "${HOMEBREW_PREFIX}" == "/usr/local" ]]
   then
-    ruby_FILENAME="portable-ruby-2.6.10_1.el_capitan.bottle.tar.gz"
-    ruby_SHA="61029cec31c68a1fae1fa90fa876adf43d0becff777da793f9b5c5577f00567a"
+    ruby_FILENAME="portable-ruby-3.1.4.el_capitan.bottle.tar.gz"
+    ruby_SHA="02180ca8b8295422ae84921bcf034b7ee8ce5575488bd5e6a37a192e53cd5d34"
   elif [[ "${HOMEBREW_PHYSICAL_PROCESSOR}" == "arm64" ]]
   then
-    ruby_FILENAME="portable-ruby-2.6.10_1.arm64_big_sur.bottle.tar.gz"
-    ruby_SHA="905b0c3896164ae8067a22fff2fd0b80b16d3c8bb72441403eedf69da71ec717"
+    ruby_FILENAME="portable-ruby-3.1.4.arm64_big_sur.bottle.tar.gz"
+    ruby_SHA="d783cbeb6e6ef0d71c0b442317b54554370decd6fac66bf2d4938c07a63f67be"
   fi
 elif [[ -n "${HOMEBREW_LINUX}" ]]
 then
   case "${HOMEBREW_PROCESSOR}" in
     x86_64)
-      ruby_FILENAME="portable-ruby-2.6.10_1.x86_64_linux.bottle.tar.gz"
-      ruby_SHA="68923daf3e139482b977c3deba63a3b54ea37bb5f716482948878819ef911bad"
+      ruby_FILENAME="portable-ruby-3.1.4.x86_64_linux.bottle.tar.gz"
+      ruby_SHA="f7be167f7ac4f296b9f4c5874ceeea4aafd9999c3c7f2b0378cae7dd273e2322"
       ;;
     *) ;;
   esac
@@ -53,7 +53,7 @@ then
   fi
   ruby_URLs+=(
     "https://ghcr.io/v2/homebrew/portable-ruby/portable-ruby/blobs/sha256:${ruby_SHA}"
-    "https://github.com/Homebrew/homebrew-portable-ruby/releases/download/2.6.10_1/${ruby_FILENAME}"
+    "https://github.com/Homebrew/homebrew-portable-ruby/releases/download/3.1.4/${ruby_FILENAME}"
   )
   ruby_URL="${ruby_URLs[0]}"
 fi
@@ -82,16 +82,6 @@ check_linux_glibc_version() {
     fi
   else
     odie "Failed to detect system Glibc version."
-  fi
-}
-
-# Execute the specified command, and suppress stderr unless HOMEBREW_STDERR is set.
-quiet_stderr() {
-  if [[ -z "${HOMEBREW_STDERR}" ]]
-  then
-    command "$@" 2>/dev/null
-  else
-    command "$@"
   fi
 }
 
@@ -243,7 +233,7 @@ install() {
   tar "${tar_args}" "${CACHED_LOCATION}"
   safe_cd "${VENDOR_DIR}/portable-${VENDOR_NAME}"
 
-  if quiet_stderr "./${VENDOR_VERSION}/bin/${VENDOR_NAME}" --version >/dev/null
+  if "./${VENDOR_VERSION}/bin/${VENDOR_NAME}" --version >/dev/null
   then
     ln -sfn "${VENDOR_VERSION}" current
     if [[ -d "${VENDOR_VERSION}.reinstall" ]]

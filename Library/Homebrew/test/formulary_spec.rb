@@ -161,8 +161,7 @@ describe Formulary do
         allow(described_class).to receive(:loader_for).and_call_original
 
         # don't try to load/fetch gcc/glibc
-        allow(DevelopmentTools).to receive(:needs_libc_formula?).and_return(false)
-        allow(DevelopmentTools).to receive(:needs_compiler_formula?).and_return(false)
+        allow(DevelopmentTools).to receive_messages(needs_libc_formula?: false, needs_compiler_formula?: false)
       end
 
       let(:installed_formula) { described_class.factory(formula_path) }
@@ -183,6 +182,48 @@ describe Formulary do
         keg = Keg.new(installed_formula.prefix)
         f = described_class.from_keg(keg)
         expect(f).to be_a(Formula)
+      end
+    end
+
+    context "when migrating from a Tap" do
+      let(:tap) { Tap.new("homebrew", "foo") }
+      let(:another_tap) { Tap.new("homebrew", "bar") }
+      let(:tap_migrations_path) { tap.path/"tap_migrations.json" }
+      let(:another_tap_formula_path) { another_tap.path/"Formula/#{formula_name}.rb" }
+
+      before do
+        tap.path.mkpath
+        another_tap_formula_path.dirname.mkpath
+        another_tap_formula_path.write formula_content
+      end
+
+      after do
+        FileUtils.rm_rf tap.path
+        FileUtils.rm_rf another_tap.path
+      end
+
+      it "returns a Formula that has gone through a tap migration into homebrew/core" do
+        tap_migrations_path.write <<~EOS
+          {
+            "#{formula_name}": "homebrew/core"
+          }
+        EOS
+        formula = described_class.factory("#{tap}/#{formula_name}")
+        expect(formula).to be_a(Formula)
+        expect(formula.tap).to eq(CoreTap.instance)
+        expect(formula.path).to eq(formula_path)
+      end
+
+      it "returns a Formula that has gone through a tap migration into another tap" do
+        tap_migrations_path.write <<~EOS
+          {
+            "#{formula_name}": "#{another_tap}"
+          }
+        EOS
+        formula = described_class.factory("#{tap}/#{formula_name}")
+        expect(formula).to be_a(Formula)
+        expect(formula.tap).to eq(another_tap)
+        expect(formula.path).to eq(another_tap_formula_path)
       end
     end
 
@@ -333,8 +374,7 @@ describe Formulary do
         allow(described_class).to receive(:loader_for).and_return(described_class::FormulaAPILoader.new(formula_name))
 
         # don't try to load/fetch gcc/glibc
-        allow(DevelopmentTools).to receive(:needs_libc_formula?).and_return(false)
-        allow(DevelopmentTools).to receive(:needs_compiler_formula?).and_return(false)
+        allow(DevelopmentTools).to receive_messages(needs_libc_formula?: false, needs_compiler_formula?: false)
       end
 
       it "returns a Formula when given a name" do
@@ -479,17 +519,6 @@ describe Formulary do
 
     it "returns a symbol if the original string starts with a colon" do
       expect(described_class.convert_to_string_or_symbol(":foo")).to eq :foo
-    end
-  end
-
-  describe "::convert_to_deprecate_disable_reason_string_or_symbol" do
-    it "returns the original string if it isn't a preset reason" do
-      expect(described_class.convert_to_deprecate_disable_reason_string_or_symbol("foo")).to eq "foo"
-    end
-
-    it "returns a symbol if the original string is a preset reason" do
-      expect(described_class.convert_to_deprecate_disable_reason_string_or_symbol("does_not_build"))
-        .to eq :does_not_build
     end
   end
 end

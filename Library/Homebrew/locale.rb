@@ -41,12 +41,12 @@ class Locale
     scanner = StringScanner.new(string)
 
     if (language = scanner.scan(LANGUAGE_REGEX))
-      sep = scanner.scan(/-/)
+      sep = scanner.scan("-")
       return if (sep && scanner.eos?) || (sep.nil? && !scanner.eos?)
     end
 
     if (script = scanner.scan(SCRIPT_REGEX))
-      sep = scanner.scan(/-/)
+      sep = scanner.scan("-")
       return if (sep && scanner.eos?) || (sep.nil? && !scanner.eos?)
     end
 
@@ -69,7 +69,7 @@ class Locale
     }.each do |key, value|
       next if value.nil?
 
-      regex = self.class.const_get("#{key.upcase}_REGEX")
+      regex = self.class.const_get(:"#{key.upcase}_REGEX")
       raise ParserError, "'#{value}' does not match #{regex}" unless value&.match?(regex)
 
       instance_variable_set(:"@#{key}", value)

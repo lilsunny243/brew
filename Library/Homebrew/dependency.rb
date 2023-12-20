@@ -41,12 +41,13 @@ class Dependency
   end
 
   def to_formula
-    formula = Formulary.factory(name)
+    formula = Formulary.factory(name, warn: false)
     formula.build = BuildOptions.new(options, formula.options)
     formula
   end
 
-  def installed?(minimum_version: nil)
+  sig { params(minimum_version: T.nilable(Version), minimum_revision: T.nilable(Integer)).returns(T::Boolean) }
+  def installed?(minimum_version: nil, minimum_revision: nil)
     formula = begin
       to_formula
     rescue FormulaUnavailableError
@@ -54,15 +55,30 @@ class Dependency
     end
     return false unless formula
 
-    if minimum_version.present?
-      formula.any_version_installed? && (formula.any_installed_version.version >= minimum_version)
+    return true if formula.latest_version_installed?
+
+    return false if minimum_version.blank?
+
+    installed_version = formula.any_installed_version
+    return false unless installed_version
+
+    # Tabs prior to 4.1.18 did not have revision or pkg_version fields.
+    # As a result, we have to be more conversative when we do not have
+    # a minimum revision from the tab and assume that if the formula has a
+    # the same version and a non-zero revision that it needs upgraded.
+    if minimum_revision.present?
+      minimum_pkg_version = PkgVersion.new(minimum_version, minimum_revision)
+      installed_version >= minimum_pkg_version
+    elsif installed_version.version == minimum_version
+      formula.revision.zero?
     else
-      formula.latest_version_installed?
+      installed_version.version > minimum_version
     end
   end
 
-  def satisfied?(inherited_options = [], minimum_version: nil)
-    installed?(minimum_version: minimum_version) && missing_options(inherited_options).empty?
+  def satisfied?(inherited_options = [], minimum_version: nil, minimum_revision: nil)
+    installed?(minimum_version: minimum_version, minimum_revision: minimum_revision) &&
+      missing_options(inherited_options).empty?
   end
 
   def missing_options(inherited_options)
@@ -248,8 +264,9 @@ class UsesFromMacOSDependency < Dependency
     [name, tags, bounds].hash
   end
 
-  def installed?(minimum_version: nil)
-    use_macos_install? || super(minimum_version: minimum_version)
+  sig { params(minimum_version: T.nilable(Version), minimum_revision: T.nilable(Integer)).returns(T::Boolean) }
+  def installed?(minimum_version: nil, minimum_revision: nil)
+    use_macos_install? || super(minimum_version: minimum_version, minimum_revision: minimum_revision)
   end
 
   sig { returns(T::Boolean) }

@@ -67,14 +67,14 @@ class Tap
 
   sig { returns(CoreCaskTap) }
   def self.default_cask_tap
-    odeprecated "Tap.default_cask_tap", "CoreCaskTap.instance"
+    odisabled "Tap.default_cask_tap", "CoreCaskTap.instance"
 
     CoreCaskTap.instance
   end
 
   sig { params(force: T::Boolean).returns(T::Boolean) }
   def self.install_default_cask_tap_if_necessary(force: false)
-    odeprecated "Tap.install_default_cask_tap_if_necessary", "CoreCaskTap.ensure_installed!"
+    odisabled "Tap.install_default_cask_tap_if_necessary", "CoreCaskTap.ensure_installed!"
 
     false
   end
@@ -319,8 +319,7 @@ class Tap
       path.cd { safe_system "git", *args }
       return
     elsif (core_tap? || core_cask_tap?) && !Homebrew::EnvConfig.no_install_from_api? && !force
-      # odeprecated: move to odie in the next minor release. This may break some CI so we should give notice.
-      opoo "Tapping #{name} is no longer typically necessary.\n" \
+      odie "Tapping #{name} is no longer typically necessary.\n" \
            "Add #{Formatter.option("--force")} if you are sure you need it done."
     end
 
@@ -427,12 +426,14 @@ class Tap
     args = %w[fetch]
     args << "--quiet" if quiet
     args << "origin"
+    args << "+refs/heads/*:refs/remotes/origin/*"
     safe_system "git", "-C", path, *args
     git_repo.set_head_origin_auto
 
     new_upstream_head = T.must(git_repo.origin_branch_name)
     return if new_upstream_head == current_upstream_head
 
+    safe_system "git", "-C", path, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"
     git_repo.rename_branch old: current_upstream_head, new: new_upstream_head
     git_repo.set_upstream_branch local: new_upstream_head, origin: new_upstream_head
 
@@ -732,13 +733,13 @@ class Tap
       "installed"     => installed?,
       "official"      => official?,
       "formula_names" => formula_names,
-      "formula_files" => formula_files.map(&:to_s),
       "cask_tokens"   => cask_tokens,
-      "cask_files"    => cask_files.map(&:to_s),
-      "command_files" => command_files.map(&:to_s),
     }
 
     if installed?
+      hash["formula_files"] = formula_files.map(&:to_s)
+      hash["cask_files"] = cask_files.map(&:to_s)
+      hash["command_files"] = command_files.map(&:to_s)
       hash["remote"] = remote
       hash["custom_remote"] = custom_remote?
       hash["private"] = private?
@@ -1136,12 +1137,13 @@ class CoreTap < AbstractCoreTap
   def formula_files_by_name
     return super if Homebrew::EnvConfig.no_install_from_api?
 
+    tap_path = path.to_s
     Homebrew::API::Formula.all_formulae.each_with_object({}) do |item, hash|
       name, formula_hash = item
       # If there's more than one item with the same path: use the longer one to prioritise more specific results.
       existing_path = hash[name]
-      new_path = path/formula_hash["ruby_source_path"]
-      hash[name] = new_path if existing_path.nil? || existing_path.to_s.length < new_path.to_s.length
+      new_path = File.join(tap_path, formula_hash["ruby_source_path"]) # Pathname equivalent is slow in a tight loop
+      hash[name] = Pathname(new_path) if existing_path.nil? || existing_path.to_s.length < new_path.length
     end
   end
 end

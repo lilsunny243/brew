@@ -39,8 +39,8 @@ module Kernel
 
     return if !debug && !always_display
 
-    puts Formatter.headline(title, color: :magenta)
-    puts sput unless sput.empty?
+    $stderr.puts Formatter.headline(title, color: :magenta)
+    $stderr.puts sput unless sput.empty?
   end
 
   def oh1_title(title, truncate: :auto)
@@ -155,10 +155,10 @@ module Kernel
     end
   end
 
-  def odisabled(method, replacement = nil, options = {})
+  def odisabled(method, replacement = nil, **options)
     options = { disable: true, caller: caller }.merge(options)
     # This odeprecated should stick around indefinitely.
-    odeprecated(method, replacement, options)
+    odeprecated(method, replacement, **options)
   end
 
   def pretty_installed(formula)
@@ -315,12 +315,6 @@ module Kernel
     with_env(DBUS_SESSION_BUS_ADDRESS: ENV.fetch("HOMEBREW_DBUS_SESSION_BUS_ADDRESS", nil)) do
       safe_system(browser, *args)
     end
-  end
-
-  # GZips the given paths, and returns the gzipped paths.
-  def gzip(*paths)
-    odisabled "Utils.gzip", "Utils::Gzip.compress"
-    Utils::Gzip.compress(*paths)
   end
 
   def ignore_interrupts(_opt = nil)
@@ -500,18 +494,6 @@ module Kernel
     ensure
       ENV.update(old_values)
     end
-  end
-
-  sig { returns(String) }
-  def preferred_shell
-    odisabled "preferred_shell"
-    Utils::Shell.preferred_path(default: "/bin/sh")
-  end
-
-  sig { returns(String) }
-  def shell_profile
-    odisabled "shell_profile"
-    Utils::Shell.profile
   end
 
   def tap_and_name_comparison

@@ -160,11 +160,12 @@ module Homebrew
         return if global_switch
 
         description = option_description(description, *names, hidden: hidden)
-        if replacement.nil?
-          process_option(*names, description, type: :switch, hidden: hidden)
-        else
-          description += " (disabled#{"; replaced by #{replacement}" if replacement.present?})"
+        process_option(*names, description, type: :switch, hidden: hidden) unless disable
+
+        if replacement || disable
+          description += " (#{disable ? "disabled" : "deprecated"}#{"; replaced by #{replacement}" if replacement})"
         end
+
         @parser.public_send(method, *names, *wrap_option_desc(description)) do |value|
           # This odeprecated should stick around indefinitely.
           odeprecated "the `#{names.first}` switch", replacement, disable: disable if !replacement.nil? || disable
@@ -177,12 +178,12 @@ module Homebrew
           set_constraints(name, depends_on: depends_on)
         end
 
-        env_value = env?(env)
+        env_value = value_for_env(env)
         set_switch(*names, value: env_value, from: :env) unless env_value.nil?
       end
       alias switch_option switch
 
-      def env?(env)
+      def value_for_env(env)
         return if env.blank?
 
         method_name = :"#{env}?"
@@ -192,6 +193,7 @@ module Homebrew
           ENV.fetch("HOMEBREW_#{env.upcase}", nil)
         end
       end
+      private :value_for_env
 
       def description(text = nil)
         return @description if text.blank?
@@ -515,8 +517,8 @@ module Homebrew
         end
       end
 
-      def disable_switch(*names)
-        names.each do |name|
+      def disable_switch(*args)
+        args.each do |name|
           @args["#{option_to_name(name)}?"] = if name.start_with?("--[no-]")
             nil
           else
@@ -526,7 +528,7 @@ module Homebrew
       end
 
       def option_passed?(name)
-        @args[name.to_sym] || @args["#{name}?".to_sym]
+        @args[name.to_sym] || @args[:"#{name}?"]
       end
 
       def wrap_option_desc(desc)
@@ -614,6 +616,7 @@ module Homebrew
         @processed_options.reject! { |existing| existing.second == option.long.first } if option.long.first.present?
         @processed_options << [option.short.first, option.long.first, option.arg, option.desc.first, hidden]
 
+        args.pop # last argument is the description
         if type == :switch
           disable_switch(*args)
         else
@@ -652,7 +655,7 @@ module Homebrew
 
           begin
             Formulary.factory(arg, spec, flags: argv.select { |a| a.start_with?("--") })
-          rescue FormulaUnavailableError
+          rescue FormulaUnavailableError, FormulaSpecificationError
             nil
           end
         end.compact.uniq(&:name)

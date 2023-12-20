@@ -4,10 +4,10 @@ source "https://rubygems.org"
 
 # The default case (no envs), should always be a restrictive bound on the lowest supported minor version.
 # This is the branch that Dependabot will use.
-if ENV.fetch("HOMEBREW_DEVELOPER", "").empty? || ENV.fetch("HOMEBREW_USE_RUBY_FROM_PATH", "").empty?
-  ruby "~> 2.6.0"
+if ENV.fetch("HOMEBREW_USE_RUBY_FROM_PATH", "").empty?
+  ruby "~> 3.1.0"
 else
-  ruby ">= 2.6.0"
+  ruby ">= 3.1.0"
 end
 
 # disallowed gems (should not be used)
@@ -34,9 +34,7 @@ group :pr_upload, optional: true do
   gem "json_schemer", require: false
 end
 group :prof, optional: true do
-  # NOTE: ruby-prof v1.4.3 is the last version that supports Ruby 2.6.x
-  # TODO: remove explicit version when HOMEBREW_REQUIRED_RUBY_VERSION >= 2.7
-  gem "ruby-prof", "1.4.3", require: false
+  gem "ruby-prof", require: false
   gem "stackprof", require: false
 end
 group :pry, optional: true do
@@ -68,16 +66,16 @@ group :typecheck, optional: true do
   gem "tapioca", require: false
 end
 
+# shared gems (used by multiple groups)
+group :audit, :bump_unversioned_casks, :livecheck, optional: true do
+  gem "rexml", require: false
+end
+
 # vendored gems (no group)
-gem "activesupport"
+gem "activesupport", "<7" # we're actively working to remove this: https://github.com/Homebrew/brew/issues/16190
 gem "addressable"
 gem "patchelf"
 gem "plist"
 gem "ruby-macho"
 gem "sorbet-runtime"
 gem "warning"
-
-# TODO: remove when HOMEBREW_REQUIRED_RUBY_VERSION >= 2.7
-install_if -> { RUBY_VERSION < "2.7" } do
-  gem "did_you_mean"
-end

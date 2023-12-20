@@ -213,7 +213,7 @@ Show text\-based graph description in DOT format\.
 .
 .TP
 \fB\-\-annotate\fR
-Mark any build, test, optional, or recommended dependencies as such in the output\.
+Mark any build, test, implicit, optional, or recommended dependencies as such in the output\.
 .
 .TP
 \fB\-\-installed\fR
@@ -229,7 +229,11 @@ Evaluate all available formulae and casks, whether installed or not, to list the
 .
 .TP
 \fB\-\-for\-each\fR
-Switch into the mode used by the \fB\-\-all\fR option, but only list dependencies for each provided \fIformula\fR, one formula per line\. This is used for debugging the \fB\-\-installed\fR/\fB\-\-all\fR display mode\.
+Switch into the mode used by the \fB\-\-eval\-all\fR option, but only list dependencies for each provided \fIformula\fR, one formula per line\. This is used for debugging the \fB\-\-installed\fR/\fB\-\-eval\-all\fR display mode\.
+.
+.TP
+\fB\-\-HEAD\fR
+Show dependencies for HEAD version instead of stable version\.
 .
 .TP
 \fB\-\-formula\fR
@@ -299,11 +303,11 @@ Download a bottle (if available) or source packages for \fIformula\fRe and binar
 .
 .TP
 \fB\-\-os\fR
-Download for the given operating system\.(Pass \fBall\fR to download for all operating systems\.)
+Download for the given operating system\. (Pass \fBall\fR to download for all operating systems\.)
 .
 .TP
 \fB\-\-arch\fR
-Download for the given CPU architecture\.(Pass \fBall\fR to download for all architectures\.)
+Download for the given CPU architecture\. (Pass \fBall\fR to download for all architectures\.)
 .
 .TP
 \fB\-\-bottle\-tag\fR
@@ -754,6 +758,9 @@ Also include outdated casks including those with \fBauto_updates true\fR\.
 .SS "\fBpin\fR \fIinstalled_formula\fR [\.\.\.]"
 Pin the specified \fIformula\fR, preventing them from being upgraded when issuing the \fBbrew upgrade\fR \fIformula\fR command\. See also \fBunpin\fR\.
 .
+.P
+Note: Other packages which depend on newer versions of a pinned formula might not install or run correctly\.
+.
 .SS "\fBpostinstall\fR, \fBpost_install\fR \fIinstalled_formula\fR [\.\.\.]"
 Rerun the post\-install steps for \fIformula\fR\.
 .
@@ -940,11 +947,14 @@ Search for \fItext\fR in the given database\.
 \fB\-\-ubuntu\fR
 Search for \fItext\fR in the given database\.
 .
+.SS "\fBsetup\-ruby\fR"
+Installs and configures Homebrew\'s Ruby\.
+.
 .SS "\fBshellenv [bash|csh|fish|pwsh|sh|tcsh|zsh]\fR"
 Print export statements\. When run in a shell, this installation of Homebrew will be added to your \fBPATH\fR, \fBMANPATH\fR, and \fBINFOPATH\fR\.
 .
 .P
-The variables \fBHOMEBREW_PREFIX\fR, \fBHOMEBREW_CELLAR\fR and \fBHOMEBREW_REPOSITORY\fR are also exported to avoid querying them multiple times\. To help guarantee idempotence, this command produces no output when Homebrew\'s \fBbin\fR and \fBsbin\fR directories are first and second respectively in your \fBPATH\fR\. Consider adding evaluation of this command\'s output to your dotfiles (e\.g\. \fB~/\.profile\fR, \fB~/\.bash_profile\fR, or \fB~/\.zprofile\fR) with: \fBeval "$(brew shellenv)"\fR
+The variables \fBHOMEBREW_PREFIX\fR, \fBHOMEBREW_CELLAR\fR and \fBHOMEBREW_REPOSITORY\fR are also exported to avoid querying them multiple times\. To help guarantee idempotence, this command produces no output when Homebrew\'s \fBbin\fR and \fBsbin\fR directories are first and second respectively in your \fBPATH\fR\. Consider adding evaluation of this command\'s output to your dotfiles (e\.g\. \fB~/\.bash_profile\fR or \fB~/\.zprofile\fR on macOS and \fB~/\.bashrc\fR or \fB~/\.zshrc\fR on Linux) with: \fBeval "$(brew shellenv)"\fR
 .
 .P
 The shell can be specified explicitly with a supported shell name parameter\. Unknown shells will output POSIX exports\.
@@ -1096,10 +1106,6 @@ Install from a bottle if it exists for the current or newest version of macOS, e
 Fetch the upstream repository to detect if the HEAD installation of the formula is outdated\. Otherwise, the repository\'s HEAD will only be checked for updates when a new stable or development version has been released\.
 .
 .TP
-\fB\-\-ignore\-pinned\fR
-Set a successful exit status even if pinned formulae are not upgraded\.
-.
-.TP
 \fB\-\-keep\-tmp\fR
 Retain the temporary files created during installation\.
 .
@@ -1197,11 +1203,11 @@ If \fIformula\fR is provided, display the file or directory used to cache \fIfor
 .
 .TP
 \fB\-\-os\fR
-Show cache file for the given operating system\.(Pass \fBall\fR to show cache files for all operating systems\.)
+Show cache file for the given operating system\. (Pass \fBall\fR to show cache files for all operating systems\.)
 .
 .TP
 \fB\-\-arch\fR
-Show cache file for the given CPU architecture\.(Pass \fBall\fR to show cache files for all architectures\.)
+Show cache file for the given CPU architecture\. (Pass \fBall\fR to show cache files for all architectures\.)
 .
 .TP
 \fB\-s\fR, \fB\-\-build\-from\-source\fR
@@ -1322,7 +1328,7 @@ Evaluate all available formulae and casks, whether installed or not, to audit th
 .
 .TP
 \fB\-\-new\fR
-Run various additional style checks to determine if a new formula or cask is eligible for Homebrew\. This should be used when creating new formula and implies \fB\-\-strict\fR and \fB\-\-online\fR\.
+Run various additional style checks to determine if a new formula or cask is eligible for Homebrew\. This should be used when creating new formulae or casks and implies \fB\-\-strict\fR and \fB\-\-online\fR\.
 .
 .TP
 \fB\-\-[no\-]signing\fR
@@ -1974,10 +1980,6 @@ Run \fBbrew pr\-publish\fR on matching pull requests\.
 Instruct \fBbrew pr\-publish\fR to automatically reformat and reword commits in the pull request to the preferred format\.
 .
 .TP
-\fB\-\-no\-autosquash\fR
-Instruct \fBbrew pr\-publish\fR to skip automatically reformatting and rewording commits in the pull request to the preferred format\.
-.
-.TP
 \fB\-\-ignore\-failures\fR
 Include pull requests that have failing status checks\.
 .
@@ -1987,10 +1989,6 @@ Publish bottles for a pull request with GitHub Actions\. Requires write access t
 .TP
 \fB\-\-autosquash\fR
 If supported on the target tap, automatically reformat and reword commits to our preferred format\.
-.
-.TP
-\fB\-\-no\-autosquash\fR
-Skip automatically reformatting and rewording commits in the pull request to the preferred format, even if supported on the target tap\.
 .
 .TP
 \fB\-\-large\-runner\fR
@@ -2042,10 +2040,6 @@ If the formula specifies a rebuild version, attempt to preserve its value in the
 .TP
 \fB\-\-autosquash\fR
 Automatically reformat and reword commits in the pull request to our preferred format\.
-.
-.TP
-\fB\-\-no\-autosquash\fR
-Skip automatically reformatting and rewording commits in the pull request to our preferred format\.
 .
 .TP
 \fB\-\-branch\-okay\fR
@@ -2239,7 +2233,7 @@ Test formulae even if they are unlinked\.
 .
 .TP
 \fB\-\-HEAD\fR
-Test the head version of a formula\.
+Test the HEAD version of a formula\.
 .
 .TP
 \fB\-\-keep\-tmp\fR
@@ -2333,6 +2327,10 @@ Skip getting analytics data and sort by number of dependents instead\.
 .TP
 \fB\-\-total\fR
 Print the number of unbottled and total formulae\.
+.
+.TP
+\fB\-\-lost\fR
+Print the \fBhomebrew/core\fR commits where bottles were lost in the last week\.
 .
 .TP
 \fB\-\-eval\-all\fR
@@ -2530,7 +2528,7 @@ This script will run \fBbrew update\fR in the background once every 24 hours (by
 .
 .P
 \fBbrew autoupdate start\fR [\fI\fBinterval\fR\fR] [\fI\fBoptions\fR\fR]
-    Start autoupdating either once every \fBinterval\fR hours or once every 24 hours\. Please note the interval has to be passed in seconds, so 12 hours would be \fBbrew autoupdate start 43200\fR\. Pass \fB\-\-upgrade\fR or \fB\-\-cleanup\fR to automatically run \fBbrew upgrade\fR and/or \fBbrew cleanup\fR respectively\. Pass \fB\-\-enable\-notification\fR to send a notification when the autoupdate process has finished successfully\.
+    Start autoupdating either once every \fBinterval\fR hours or once every 24 hours\. Please note the interval has to be passed in seconds, so 12 hours would be \fBbrew autoupdate start 43200\fR\. If you want to start the autoupdate immediately and on system boot, pass \fB\-\-immediate\fR\. Pass \fB\-\-upgrade\fR or \fB\-\-cleanup\fR to automatically run \fBbrew upgrade\fR and/or \fBbrew cleanup\fR respectively\. Pass \fB\-\-enable\-notification\fR to send a notification when the autoupdate process has finished successfully\.
 .
 .P
 \fBbrew autoupdate stop\fR
@@ -2566,7 +2564,11 @@ Send a notification when the autoupdate process has finished successfully, if \f
 .
 .TP
 \fB\-\-immediate\fR
-Starts the autoupdate command immediately, instead of waiting for one interval (24 hours by default) to pass first\. Must be passed with \fBstart\fR\.
+Starts the autoupdate command immediately and on system boot, instead of waiting for one interval (24 hours by default) to pass first\. Must be passed with \fBstart\fR\.
+.
+.TP
+\fB\-\-sudo\fR
+If a Cask requires sudo, autoupdate will open a GUI to ask for the password\. Requires https://formulae\.brew\.sh/formula/pinentry\-mac to be installed\.
 .
 .SS "\fBbundle\fR [\fIsubcommand\fR]"
 Bundler for non\-Ruby dependencies from Homebrew, Homebrew Cask, Mac App Store and Whalebrew\.
@@ -2634,11 +2636,11 @@ Read the \fBBrewfile\fR from \fB~/\.Brewfile\fR or the \fBHOMEBREW_BUNDLE_FILE_G
 .
 .TP
 \fB\-f\fR, \fB\-\-force\fR
-\fBdump\fR overwrites an existing \fBBrewfile\fR\. \fBcleanup\fR actually performs its cleanup operations\.
+\fBinstall\fR runs with \fB\-\-force\fR/\fB\-\-overwrite\fR\. \fBdump\fR overwrites an existing \fBBrewfile\fR\. \fBcleanup\fR actually performs its cleanup operations\.
 .
 .TP
 \fB\-\-cleanup\fR
-\fBinstall\fR performs cleanup operation, same as running \fBcleanup \-\-force\fR\. This is enabled by default if HOMEBREW_BUNDLE_INSTALL_CLEANUP is set\.
+\fBinstall\fR performs cleanup operation, same as running \fBcleanup \-\-force\fR\. This is enabled by default if HOMEBREW_BUNDLE_INSTALL_CLEANUP is set and \fB\-\-global\fR is passed\.
 .
 .TP
 \fB\-\-no\-lock\fR
@@ -2741,6 +2743,10 @@ Run \fIsubcommand\fR on all services\.
 \fB\-\-json\fR
 Output as JSON\.
 .
+.TP
+\fB\-\-no\-wait\fR
+Don\'t wait for \fBstop\fR to finish stopping the service\.
+.
 .SS "\fBtest\-bot\fR [\fIoptions\fR] [\fIformula\fR]"
 Tests the full lifecycle of a Homebrew change to a tap (Git repository)\. For example, for a GitHub Actions pull request that changes a formula \fBbrew test\-bot\fR will ensure the system is cleaned and set up to test the formula, install the formula, run various tests and checks on it, bottle (package) the binaries and test formulae that depend on it to ensure they aren\'t broken by these changes\.
 .
@@ -2836,6 +2842,10 @@ Don\'t test livecheck\.
 Only test the direct dependents\.
 .
 .TP
+\fB\-\-skip\-stable\-version\-audit\fR
+Don\'t audit the stable version\.
+.
+.TP
 \fB\-\-only\-cleanup\-before\fR
 Only run the pre\-cleanup step\. Needs \fB\-\-cleanup\fR\.
 .
@@ -2911,6 +2921,10 @@ Update database entries with outdated formula versions\.
 .TP
 \fB\-\-install\-missing\fR
 Install and update formulae that are missing from the database and don\'t have bottles\.
+.
+.TP
+\fB\-\-eval\-all\fR
+Evaluate all installed taps, rather than just the core tap\.
 .
 .TP
 \fB\-\-max\-downloads\fR
@@ -3276,7 +3290,7 @@ Linux only: Set this value to a new enough \fBgit\fR executable for Homebrew to 
 \fBHOMEBREW_GITHUB_API_TOKEN\fR
 .
 .br
-Use this personal access token for the GitHub API, for features such as \fBbrew search\fR\. You can create one at \fIhttps://github\.com/settings/tokens\fR\. If set, GitHub will allow you a greater number of API requests\. For more information, see: \fIhttps://docs\.github\.com/en/rest/overview/resources\-in\-the\-rest\-api#rate\-limiting\fR
+Use this personal access token for the GitHub API, for features such as \fBbrew search\fR\. You can create one at \fIhttps://github\.com/settings/tokens\fR\. If set, GitHub will allow you a greater number of API requests\. For more information, see: \fIhttps://docs\.github\.com/en/rest/overview/rate\-limits\-for\-the\-rest\-api\fR
 .
 .IP
 \fINote:\fR Homebrew doesn\'t require permissions for any of the scopes, but some developer commands may require additional permissions\.
@@ -3483,6 +3497,12 @@ Use this as the \fBsvn\fR(1) binary\.
 If set in Homebrew\'s system\-wide environment file (\fB/etc/homebrew/brew\.env\fR), the system\-wide environment file will be loaded last to override any prefix or user settings\.
 .
 .TP
+\fBHOMEBREW_SUDO_THROUGH_SUDO_USER\fR
+.
+.br
+If set, Homebrew will use the \fBSUDO_USER\fR environment variable to define the user to \fBsudo\fR(8) through when running \fBsudo\fR(8)\.
+.
+.TP
 \fBHOMEBREW_TEMP\fR
 .
 .br
@@ -3595,7 +3615,7 @@ Homebrew\'s Project Leadership Committee is Colin Dean, Issy Long, Mike McQuaid,
 Homebrew\'s Technical Steering Committee is Bo Anderson, FX Coudert, Michka Popoff, Mike McQuaid and Rylan Polster\.
 .
 .P
-Homebrew\'s maintainers are Alexander Bayandin, Bevan Kay, Bo Anderson, Branch Vincent, Caleb Xu, Carlo Cabrera, Daniel Nachun, David Baumgold, Dawid Dziurla, Dustin Rodrigues, Eric Knibbe, FX Coudert, George Adams, Issy Long, Justin Krehel, Markus Reiter, Miccal Matthews, Michael Cho, Michka Popoff, Mike McQuaid, Nanda H Krishna, Patrick Linnane, Razvan Azamfirei, Rui Chen, Ruoyu Zhong, Rylan Polster, Sam Ford, Sean Molenaar and Thierry Moisan\.
+Homebrew\'s maintainers are Alexander Bayandin, Bevan Kay, Bo Anderson, Branch Vincent, Caleb Xu, Carlo Cabrera, David Baumgold, Dustin Rodrigues, Eric Knibbe, FX Coudert, George Adams, Issy Long, Justin Krehel, Markus Reiter, Miccal Matthews, Michael Cho, Michka Popoff, Mike McQuaid, Nanda H Krishna, Patrick Linnane, Razvan Azamfirei, Rui Chen, Ruoyu Zhong, Rylan Polster, Sam Ford, Sean Molenaar and Thierry Moisan\.
 .
 .P
 Former maintainers with significant contributions include Misty De Méo, Shaun Jackman, Vítor Galvão, Claudia Pellegrino, Seeker, William Woodruff, Jan Viljanen, JCount, commitay, Dominyk Tiller, Tim Smith, Baptiste Fontaine, Xu Cheng, Martin Afanasjew, Brett Koonce, Charlie Sharpsteen, Jack Nagel, Adam Vandenberg, Andrew Janke, Alex Dunn, neutric, Tomasz Pajor, Uladzislau Shablinski, Alyssa Ross, ilovezfs, Chongyu Zhu and Homebrew\'s creator: Max Howell\.

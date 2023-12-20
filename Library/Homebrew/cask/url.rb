@@ -157,7 +157,7 @@ module Cask
         trust_cert:      T.nilable(T::Boolean),
         cookies:         T.nilable(T::Hash[String, String]),
         referer:         T.nilable(T.any(URI::Generic, String)),
-        header:          T.nilable(String),
+        header:          T.nilable(T.any(String, T::Array[String])),
         user_agent:      T.nilable(T.any(Symbol, String)),
         data:            T.nilable(T::Hash[String, String]),
         only_path:       T.nilable(String),
@@ -236,7 +236,7 @@ module Cask
     def raw_url_line
       return @raw_url_line if defined?(@raw_url_line)
 
-      @raw_url_line = Pathname(@caller_location.path)
+      @raw_url_line = Pathname(T.must(@caller_location.path))
                       .each_line
                       .drop(@caller_location.lineno - 1)
                       .first

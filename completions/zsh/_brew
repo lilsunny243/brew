@@ -205,6 +205,7 @@ __brew_internal_commands() {
     'rubocop:Installs, configures and runs Homebrew'\''s `rubocop`'
     'ruby:Run a Ruby instance with Homebrew'\''s libraries loaded'
     'search:Perform a substring search of cask tokens and formula names for text'
+    'setup-ruby:Installs and configures Homebrew'\''s Ruby'
     'sh:Enter an interactive shell for Homebrew'\''s build environment'
     'shellenv:Print export statements'
     'style:Check formulae or files for conformance to Homebrew style guidelines'
@@ -264,13 +265,13 @@ __brew_diagnostic_checks() {
 _brew___cache() {
   _arguments \
     '(--build-from-source --force-bottle --bottle-tag --cask)--HEAD[Show the cache file used when building from HEAD]' \
-    '(--bottle-tag)--arch[Show cache file for the given CPU architecture.(Pass `all` to show cache files for all architectures.)]' \
+    '(--bottle-tag)--arch[Show cache file for the given CPU architecture. (Pass `all` to show cache files for all architectures.)]' \
     '(--build-from-source --force-bottle --HEAD --cask --os --arch)--bottle-tag[Show the cache file used when pouring a bottle for the given tag]' \
     '(--force-bottle --bottle-tag --HEAD --cask)--build-from-source[Show the cache file used when building from source]' \
     '--debug[Display any debugging information]' \
     '(--build-from-source --bottle-tag --HEAD --cask)--force-bottle[Show the cache file used when pouring a bottle]' \
     '--help[Show this message]' \
-    '(--bottle-tag)--os[Show cache file for the given operating system.(Pass `all` to show cache files for all operating systems.)]' \
+    '(--bottle-tag)--os[Show cache file for the given operating system. (Pass `all` to show cache files for all operating systems.)]' \
     '--quiet[Make some output more quiet]' \
     '--verbose[Make some output more verbose]' \
     - formula \
@@ -432,7 +433,7 @@ _brew_audit() {
     '--git[Run additional, slower style checks that navigate the Git repository]' \
     '--help[Show this message]' \
     '(--all)--installed[Only check formulae and casks that are currently installed]' \
-    '--new[Run various additional style checks to determine if a new formula or cask is eligible for Homebrew. This should be used when creating new formula and implies `--strict` and `--online`]' \
+    '--new[Run various additional style checks to determine if a new formula or cask is eligible for Homebrew. This should be used when creating new formulae or casks and implies `--strict` and `--online`]' \
     '--no-signing[Audit for signed apps, which are required on ARM]' \
     '--online[Run additional, slower style checks that require a network connection]' \
     '(--except --only-cops --except-cops)--only[Specify a comma-separated method list to only run the methods named `audit_`method]' \
@@ -715,12 +716,13 @@ _brew_create() {
 # brew deps
 _brew_deps() {
   _arguments \
-    '--annotate[Mark any build, test, optional, or recommended dependencies as such in the output]' \
+    '--HEAD[Show dependencies for HEAD version instead of stable version]' \
+    '--annotate[Mark any build, test, implicit, optional, or recommended dependencies as such in the output]' \
     '--debug[Display any debugging information]' \
     '--direct[Show only the direct dependencies declared in the formula]' \
     '--dot[Show text-based graph description in DOT format]' \
     '(--installed)--eval-all[Evaluate all available formulae and casks, whether installed or not, to list their dependencies]' \
-    '--for-each[Switch into the mode used by the `--all` option, but only list dependencies for each provided formula, one formula per line. This is used for debugging the `--installed`/`--all` display mode]' \
+    '--for-each[Switch into the mode used by the `--eval-all` option, but only list dependencies for each provided formula, one formula per line. This is used for debugging the `--installed`/`--eval-all` display mode]' \
     '--full-name[List dependencies by their full name]' \
     '(--tree)--graph[Show dependencies as a directed graph]' \
     '--help[Show this message]' \
@@ -728,7 +730,7 @@ _brew_deps() {
     '--include-optional[Include `:optional` dependencies for formula]' \
     '--include-requirements[Include requirements in addition to dependencies for formula]' \
     '--include-test[Include `:test` dependencies for formula (non-recursive)]' \
-    '(--missing --eval-all --all)--installed[List dependencies for formulae that are currently installed. If formula is specified, list only its dependencies that are currently installed]' \
+    '(--missing --eval-all)--installed[List dependencies for formulae that are currently installed. If formula is specified, list only its dependencies that are currently installed]' \
     '(--installed)--missing[Show only missing dependencies]' \
     '--quiet[Make some output more quiet]' \
     '--skip-recommended[Skip `:recommended` dependencies for formula]' \
@@ -766,8 +768,9 @@ _brew_desc() {
 # brew determine-test-runners
 _brew_determine_test_runners() {
   _arguments \
+    '(--dependents)--all-supported[Instead of selecting runners based on the chosen formula, return all supported runners]' \
     '--debug[Display any debugging information]' \
-    '--dependents[Determine runners for testing dependents. Requires `--eval-all` or `HOMEBREW_EVAL_ALL`]' \
+    '(--all-supported)--dependents[Determine runners for testing dependents. Requires `--eval-all` or `HOMEBREW_EVAL_ALL`]' \
     '--eval-all[Evaluate all available formulae, whether installed or not, to determine testing dependents]' \
     '--help[Show this message]' \
     '--quiet[Make some output more quiet]' \
@@ -890,7 +893,7 @@ _brew_extract() {
 _brew_fetch() {
   _arguments \
     '(--cask)--HEAD[Fetch HEAD version instead of stable version]' \
-    '(--bottle-tag)--arch[Download for the given CPU architecture.(Pass `all` to download for all architectures.)]' \
+    '(--bottle-tag)--arch[Download for the given CPU architecture. (Pass `all` to download for all architectures.)]' \
     '(--build-from-source --build-bottle --force-bottle --cask --os --arch)--bottle-tag[Download a bottle for given tag]' \
     '(--build-from-source --force-bottle --bottle-tag --cask)--build-bottle[Download source packages (for eventual bottling) rather than a bottle]' \
     '(--build-bottle --force-bottle --bottle-tag)--build-from-source[Download source packages rather than a bottle]' \
@@ -900,7 +903,7 @@ _brew_fetch() {
     '(--build-from-source --build-bottle --bottle-tag --cask)--force-bottle[Download a bottle if it exists for the current or newest version of macOS, even if it would not be used during installation]' \
     '--help[Show this message]' \
     '--no-quarantine[Disable/enable quarantining of downloads (default: enabled)]' \
-    '(--bottle-tag)--os[Download for the given operating system.(Pass `all` to download for all operating systems.)]' \
+    '(--bottle-tag)--os[Download for the given operating system. (Pass `all` to download for all operating systems.)]' \
     '--quarantine[Disable/enable quarantining of downloads (default: enabled)]' \
     '--quiet[Make some output more quiet]' \
     '--retry[Retry if downloading fails or re-download if the checksum of a previously cached version no longer matches. Tries at most 5 times with exponential backoff]' \
@@ -1446,7 +1449,6 @@ _brew_pr_automerge() {
     '--debug[Display any debugging information]' \
     '--help[Show this message]' \
     '--ignore-failures[Include pull requests that have failing status checks]' \
-    '--no-autosquash[Instruct `brew pr-publish` to skip automatically reformatting and rewording commits in the pull request to the preferred format]' \
     '--publish[Run `brew pr-publish` on matching pull requests]' \
     '--quiet[Make some output more quiet]' \
     '--tap[Target tap repository (default: `homebrew/core`)]' \
@@ -1466,7 +1468,6 @@ _brew_pr_publish() {
     '--help[Show this message]' \
     '--large-runner[Run the upload job on a large runner]' \
     '--message[Message to include when autosquashing revision bumps, deletions, and rebuilds]' \
-    '--no-autosquash[Skip automatically reformatting and rewording commits in the pull request to the preferred format, even if supported on the target tap]' \
     '--quiet[Make some output more quiet]' \
     '--tap[Target tap repository (default: `homebrew/core`)]' \
     '--verbose[Make some output more verbose]' \
@@ -1487,7 +1488,6 @@ _brew_pr_pull() {
     '--ignore-missing-artifacts[Comma-separated list of workflows which can be ignored if they have not been run]' \
     '--keep-old[If the formula specifies a rebuild version, attempt to preserve its value in the generated DSL]' \
     '--message[Message to include when autosquashing revision bumps, deletions, and rebuilds]' \
-    '--no-autosquash[Skip automatically reformatting and rewording commits in the pull request to our preferred format]' \
     '--no-cherry-pick[Do not cherry-pick commits from the pull request branch]' \
     '--no-commit[Do not generate a new commit before uploading]' \
     '--no-upload[Download the bottles but don'\''t upload them]' \
@@ -1796,7 +1796,7 @@ _brew_tc() {
 # brew test
 _brew_test() {
   _arguments \
-    '--HEAD[Test the head version of a formula]' \
+    '--HEAD[Test the HEAD version of a formula]' \
     '--debug[Display any debugging information]' \
     '--force[Test formulae even if they are unlinked]' \
     '--help[Show this message]' \
@@ -1845,12 +1845,13 @@ _brew_typecheck() {
 _brew_unbottled() {
   _arguments \
     '--debug[Display any debugging information]' \
-    '(--total)--dependents[Skip getting analytics data and sort by number of dependents instead]' \
+    '(--total --lost)--dependents[Skip getting analytics data and sort by number of dependents instead]' \
     '--eval-all[Evaluate all available formulae and casks, whether installed or not, to check them. Implied if `HOMEBREW_EVAL_ALL` is set]' \
     '--help[Show this message]' \
+    '(--dependents --total)--lost[Print the `homebrew/core` commits where bottles were lost in the last week]' \
     '--quiet[Make some output more quiet]' \
     '--tag[Use the specified bottle tag (e.g. `big_sur`) instead of the current OS]' \
-    '(--dependents)--total[Print the number of unbottled and total formulae]' \
+    '(--dependents --lost)--total[Print the number of unbottled and total formulae]' \
     '--verbose[Make some output more verbose]' \
     - formula \
     '*::formula:__brew_formulae'
@@ -2056,7 +2057,6 @@ _brew_upgrade() {
     '(--formula)--greedy-auto-updates[Also include casks with `auto_updates true`]' \
     '(--formula)--greedy-latest[Also include casks with `version :latest`]' \
     '--help[Show this message]' \
-    '(--cask)--ignore-pinned[Set a successful exit status even if pinned formulae are not upgraded]' \
     '(--formula)--input-methoddir[Target location for Input Methods (default: `~/Library/Input Methods`)]' \
     '(--cask)--interactive[Download and patch formula, then open a shell. This allows the user to run `./configure --help` and otherwise determine how to turn the software package into a Homebrew package]' \
     '(--formula)--internet-plugindir[Target location for Internet Plugins (default: `~/Library/Internet Plug-Ins`)]' \

@@ -30,8 +30,7 @@ class FormulaInstaller
   include FormulaCellarChecks
   extend Predicable
 
-  attr_reader :formula
-  attr_reader :bottle_tab_runtime_dependencies
+  attr_reader :formula, :bottle_tab_runtime_dependencies
 
   attr_accessor :options, :link_keg
 
@@ -175,7 +174,7 @@ class FormulaInstaller
 
     unless bottle.compatible_locations?
       if output_warning
-        prefix = Pathname(bottle.cellar).parent
+        prefix = Pathname(bottle.cellar.to_s).parent
         opoo <<~EOS
           Building #{formula.full_name} from source as the bottle needs:
           - HOMEBREW_CELLAR: #{bottle.cellar} (yours is #{HOMEBREW_CELLAR})
@@ -201,21 +200,15 @@ class FormulaInstaller
 
   sig { void }
   def prelude
-    type, reason = DeprecateDisable.deprecate_disable_info formula
-    if type.present?
-      case type
-      when :deprecated
-        if reason.present?
-          opoo "#{formula.full_name} has been deprecated because it #{reason}!"
-        else
-          opoo "#{formula.full_name} has been deprecated!"
-        end
-      when :disabled
-        if reason.present?
-          raise CannotInstallFormulaError, "#{formula.full_name} has been disabled because it #{reason}!"
-        end
+    deprecate_disable_type = DeprecateDisable.type(formula)
+    if deprecate_disable_type.present?
+      message = "#{formula.full_name} has been #{DeprecateDisable.message(formula)}"
 
-        raise CannotInstallFormulaError, "#{formula.full_name} has been disabled!"
+      case deprecate_disable_type
+      when :deprecated
+        opoo message
+      when :disabled
+        raise CannotInstallFormulaError, message
       end
     end
 
@@ -362,7 +355,7 @@ class FormulaInstaller
     return if @compute_dependencies.blank?
 
     compute_dependencies(use_cache: false) if @compute_dependencies.any? do |dep, options|
-      next false if dep.tags != [:build, :test]
+      next false unless dep.implicit?
 
       fetch_dependencies
       install_dependency(dep, options)
@@ -530,7 +523,7 @@ on_request: installed_on_request?, options: options)
   end
 
   def unbottled_dependencies(deps)
-    deps.map(&:first).map(&:to_formula).reject do |dep_f|
+    deps.map { |(dep, _options)| dep.to_formula }.reject do |dep_f|
       next false unless dep_f.pour_bottle?
 
       dep_f.bottled?
@@ -616,11 +609,14 @@ on_request: installed_on_request?, options: options)
       keep_build_test ||= dep.build? && !install_bottle_for?(dependent, build) &&
                           (formula.head? || !dependent.latest_version_installed?)
 
-      bottle_runtime_version = @bottle_tab_runtime_dependencies.dig(dep.name, "version")
+      bottle_runtime_version = @bottle_tab_runtime_dependencies.dig(dep.name, "version").presence
+      bottle_runtime_version = Version.new(bottle_runtime_version) if bottle_runtime_version
+      bottle_runtime_revision = @bottle_tab_runtime_dependencies.dig(dep.name, "revision")
 
       if dep.prune_from_option?(build) || ((dep.build? || dep.test?) && !keep_build_test)
         Dependency.prune
-      elsif dep.satisfied?(inherited_options[dep.name], minimum_version: bottle_runtime_version)
+      elsif dep.satisfied?(inherited_options[dep.name], minimum_version:  bottle_runtime_version,
+                                                        minimum_revision: bottle_runtime_revision)
         Dependency.skip
       end
     end
@@ -1181,7 +1177,7 @@ on_request: installed_on_request?, options: options)
     return if ignore_deps?
 
     # Don't output dependencies if we're explicitly installing them.
-    deps = compute_dependencies.reject do |dep, _options|
+    deps = compute_dependencies.reject do |(dep, _options)|
       self.class.fetched.include?(dep.to_formula)
     end
 
@@ -1191,7 +1187,7 @@ on_request: installed_on_request?, options: options)
         "#{deps.map(&:first).map(&Formatter.method(:identifier)).to_sentence}",
         truncate: false
 
-    deps.each { |dep, _options| fetch_dependency(dep) }
+    deps.each { |(dep, _options)| fetch_dependency(dep) }
   end
 
   sig { returns(T.nilable(Formula)) }
@@ -1366,7 +1362,7 @@ on_request: installed_on_request?, options: options)
     return if forbidden_licenses.blank?
     return if ignore_deps?
 
-    compute_dependencies.each do |dep, _|
+    compute_dependencies.each do |(dep, _options)|
       dep_f = dep.to_formula
       next unless SPDX.licenses_forbid_installation? dep_f.license, forbidden_licenses
 

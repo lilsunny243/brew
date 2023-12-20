@@ -33,9 +33,6 @@ module Homebrew
 
     ENV["BUNDLE_WITH"] = Homebrew.valid_gem_groups.join(":")
 
-    # System Ruby does not pick up the correct SDK by default.
-    ENV["SDKROOT"] = MacOS.sdk_path if ENV["HOMEBREW_MACOS_SYSTEM_RUBY_NEW_ENOUGH"]
-
     ohai "cd #{HOMEBREW_LIBRARY_PATH}"
     HOMEBREW_LIBRARY_PATH.cd do
       if args.update
@@ -54,17 +51,27 @@ module Homebrew
       ohai "bundle pristine"
       safe_system "bundle", "pristine"
 
+      # Workaround Bundler 2.4.21 issue where platforms may be removed.
+      # Although we don't use 2.4.21, Dependabot does as it currently ignores your lockfile version.
+      # https://github.com/rubygems/rubygems/issues/7169
+      safe_system "bundle", "lock", "--add-platform", "aarch64-linux", "arm-linux"
+      system "git", "add", "Gemfile.lock" unless args.no_commit?
+
       if args.non_bundler_gems?
         %w[
           mechanize
         ].each do |gem|
           ohai "gem install #{gem}"
-          safe_system "gem", "install", "mechanize", "--install-dir", "vendor",
+          safe_system "gem", "install", gem, "--install-dir", "vendor",
                       "--no-document", "--no-wrappers", "--ignore-dependencies", "--force"
           (HOMEBREW_LIBRARY_PATH/"vendor/gems").cd do
-            if (source = Pathname.glob("#{gem}-*/").first)
-              FileUtils.ln_sf source, gem
-            end
+            source = Pathname.glob("#{gem}-*/").first
+            next if source.blank?
+
+            # We cannot use `#ln_sf` here because that has unintended consequences when
+            # the symlink we want to create exists and points to an existing directory.
+            FileUtils.rm_f gem
+            FileUtils.ln_s source, gem
           end
         end
       end

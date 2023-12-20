@@ -14,7 +14,7 @@ module Homebrew
 
   # Bump this whenever a committed vendored gem is later added to gitignore.
   # This will trigger it to reinstall properly if `brew install-bundler-gems` needs it.
-  VENDOR_VERSION = 1
+  VENDOR_VERSION = 3
   private_constant :VENDOR_VERSION
 
   RUBY_BUNDLE_VENDOR_DIRECTORY = (HOMEBREW_LIBRARY_PATH/"vendor/bundle/ruby").freeze
@@ -178,27 +178,35 @@ module Homebrew
     @user_gem_groups ||= if GEM_GROUPS_FILE.exist?
       GEM_GROUPS_FILE.readlines(chomp: true)
     else
-      # Backwards compatibility. This else block can be replaced by `[]` by the end of 2023.
-      require "settings"
-      groups = Homebrew::Settings.read(:gemgroups)&.split(";") || []
-      write_user_gem_groups(groups)
-      Homebrew::Settings.delete(:gemgroups)
-      groups
+      []
     end
   end
 
   def write_user_gem_groups(groups)
-    GEM_GROUPS_FILE.write(groups.join("\n"))
+    return if @user_gem_groups == groups && GEM_GROUPS_FILE.exist?
+
+    # Write the file atomically, in case we're working parallel
+    require "tempfile"
+    tmpfile = Tempfile.new([GEM_GROUPS_FILE.basename.to_s, "~"], GEM_GROUPS_FILE.dirname)
+    path = tmpfile.path
+    return if path.nil?
+
+    require "fileutils"
+    begin
+      FileUtils.chmod("+r", path)
+      tmpfile.write(groups.join("\n"))
+      tmpfile.close
+      File.rename(path, GEM_GROUPS_FILE)
+    ensure
+      tmpfile.unlink
+    end
+
+    @user_gem_groups = groups
   end
 
   def forget_user_gem_groups!
-    if GEM_GROUPS_FILE.exist?
-      GEM_GROUPS_FILE.truncate(0)
-    else
-      # Backwards compatibility. This else block can be removed by the end of 2023.
-      require "settings"
-      Homebrew::Settings.delete(:gemgroups)
-    end
+    GEM_GROUPS_FILE.truncate(0) if GEM_GROUPS_FILE.exist?
+    @user_gem_groups = []
   end
 
   def user_vendor_version
@@ -216,7 +224,6 @@ module Homebrew
     old_bundle_gemfile = ENV.fetch("BUNDLE_GEMFILE", nil)
     old_bundle_with = ENV.fetch("BUNDLE_WITH", nil)
     old_bundle_frozen = ENV.fetch("BUNDLE_FROZEN", nil)
-    old_sdkroot = ENV.fetch("SDKROOT", nil)
 
     invalid_groups = groups - valid_gem_groups
     raise ArgumentError, "Invalid gem groups: #{invalid_groups.join(", ")}" unless invalid_groups.empty?
@@ -229,27 +236,13 @@ module Homebrew
 
     install_bundler!
 
-    valid_user_gem_groups = user_gem_groups & valid_gem_groups
-    if RUBY_PLATFORM.end_with?("-darwin23")
-      raise "Sorbet is not currently supported under system Ruby on macOS Sonoma." if groups.include?("sorbet")
-
-      valid_user_gem_groups.delete("sorbet")
-    end
-
     # Combine the passed groups with the ones stored in settings
-    groups |= valid_user_gem_groups
+    groups |= (user_gem_groups & valid_gem_groups)
     groups.sort!
 
     ENV["BUNDLE_GEMFILE"] = gemfile
     ENV["BUNDLE_WITH"] = groups.join(" ")
     ENV["BUNDLE_FROZEN"] = "true"
-
-    # System Ruby does not pick up the correct SDK by default.
-    if ENV["HOMEBREW_MACOS_SYSTEM_RUBY_NEW_ENOUGH"]
-      macos_major = ENV.fetch("HOMEBREW_MACOS_VERSION").partition(".").first
-      sdkroot = "/Library/Developer/CommandLineTools/SDKs/MacOSX#{macos_major}.sdk"
-      ENV["SDKROOT"] = sdkroot if Dir.exist?(sdkroot)
-    end
 
     if @bundle_installed_groups != groups
       bundle = File.join(find_in_path("bundle"), "bundle")
@@ -344,6 +337,5 @@ module Homebrew
       ENV["BUNDLE_WITH"] = old_bundle_with
       ENV["BUNDLE_FROZEN"] = old_bundle_frozen
     end
-    ENV["SDKROOT"] = old_sdkroot
   end
 end

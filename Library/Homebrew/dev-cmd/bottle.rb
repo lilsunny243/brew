@@ -12,7 +12,7 @@ require "erb"
 require "utils/gzip"
 require "api"
 
-BOTTLE_ERB = <<-EOS
+BOTTLE_ERB = <<-EOS.freeze
   bottle do
     <% if [HOMEBREW_BOTTLE_DEFAULT_DOMAIN.to_s,
            "#{HOMEBREW_BOTTLE_DEFAULT_DOMAIN}/bottles"].exclude?(root_url) %>
@@ -116,7 +116,7 @@ module Homebrew
 
       @put_filenames ||= []
 
-      return if @put_filenames.include?(filename)
+      return false if @put_filenames.include?(filename)
 
       puts Formatter.error(filename.to_s)
       @put_filenames << filename

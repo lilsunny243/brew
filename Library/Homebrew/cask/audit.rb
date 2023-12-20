@@ -6,6 +6,7 @@ require "cask/download"
 require "digest"
 require "livecheck/livecheck"
 require "source_location"
+require "system_command"
 require "utils/curl"
 require "utils/git"
 require "utils/shared_audits"
@@ -288,7 +289,7 @@ module Cask
 
     sig { params(livecheck_result: T.any(NilClass, T::Boolean, Symbol)).void }
     def audit_hosting_with_livecheck(livecheck_result: audit_livecheck_version)
-      return if cask.discontinued?
+      return if cask.discontinued? || cask.deprecated? || cask.disabled?
       return if cask.version&.latest?
       return unless cask.url
       return if block_url_offline?
@@ -474,21 +475,8 @@ module Cask
       return if !signing? || download.blank? || cask.url.blank?
 
       odebug "Auditing signing"
-      artifacts = cask.artifacts.select do |k|
-        k.is_a?(Artifact::Pkg) || k.is_a?(Artifact::App) || k.is_a?(Artifact::Binary)
-      end
 
-      return if artifacts.empty?
-
-      downloaded_path = download.fetch
-      primary_container = UnpackStrategy.detect(downloaded_path, type: @cask.container&.type, merge_xattrs: true)
-
-      return if primary_container.nil?
-
-      Dir.mktmpdir do |tmpdir|
-        tmpdir = Pathname(tmpdir)
-        primary_container.extract_nestedly(to: tmpdir, basename: downloaded_path.basename, verbose: false)
-
+      extract_artifacts do |artifacts, tmpdir|
         artifacts.each do |artifact|
           artifact_path = artifact.is_a?(Artifact::Pkg) ? artifact.path : artifact.source
           path = tmpdir/artifact_path.relative_path_from(cask.staged_path)
@@ -509,6 +497,38 @@ module Cask
       end
     end
 
+    sig { void }
+    def extract_artifacts
+      return unless online?
+
+      artifacts = cask.artifacts.select do |artifact|
+        artifact.is_a?(Artifact::Pkg) || artifact.is_a?(Artifact::App) || artifact.is_a?(Artifact::Binary)
+      end
+
+      if @artifacts_extracted && @tmpdir
+        yield artifacts, @tmpdir if block_given?
+        return
+      end
+
+      return if artifacts.empty?
+
+      @tmpdir ||= Pathname(Dir.mktmpdir)
+
+      ohai "Downloading and extracting artifacts"
+
+      downloaded_path = download.fetch
+
+      primary_container = UnpackStrategy.detect(downloaded_path, type: @cask.container&.type, merge_xattrs: true)
+      return if primary_container.nil?
+
+      # Extract the container to the temporary directory.
+      primary_container.extract_nestedly(to: @tmpdir, basename: downloaded_path.basename, verbose: false)
+      @artifacts_extracted = true # Set the flag to indicate that extraction has occurred.
+
+      # Yield the artifacts and temp directory to the block if provided.
+      yield artifacts, @tmpdir if block_given?
+    end
+
     sig { returns(T.any(NilClass, T::Boolean, Symbol)) }
     def audit_livecheck_version
       return unless online?
@@ -524,7 +544,7 @@ module Cask
         )
       end
 
-      # Respect cask skip conditions (e.g. discontinued, latest, unversioned)
+      # Respect cask skip conditions (e.g. deprecated, disabled, latest, unversioned)
       skip_info ||= Homebrew::Livecheck::SkipConditions.skip_information(cask)
       return :skip if skip_info.present?
 
@@ -540,50 +560,95 @@ module Cask
       false
     end
 
-    def audit_livecheck_min_os
+    sig { void }
+    def audit_min_os
       return unless online?
-      return unless cask.livecheckable?
-      return if cask.livecheck.strategy != :sparkle
+      return unless strict?
 
-      out, _, status = curl_output("--fail", "--silent", "--location", cask.livecheck.url)
-      return unless status.success?
+      odebug "Auditing minimum OS version"
 
-      require "rexml/document"
+      plist_min_os = cask_plist_min_os
+      sparkle_min_os = livecheck_min_os
 
-      xml = begin
-        REXML::Document.new(out)
-      rescue REXML::ParseException
-        nil
-      end
+      debug_messages = []
+      debug_messages << "Plist #{plist_min_os}" if plist_min_os
+      debug_messages << "Sparkle #{sparkle_min_os}" if sparkle_min_os
+      odebug "Minimum OS version: #{debug_messages.join(" | ")}" unless debug_messages.empty?
+      min_os = [plist_min_os, sparkle_min_os].compact.max
 
-      return if xml.blank?
-
-      item = xml.elements["//rss//channel//item"]
-      return if item.blank?
-
-      min_os = item.elements["sparkle:minimumSystemVersion"]&.text
-      min_os = "11" if min_os == "10.16"
-      return if min_os.blank?
-
-      begin
-        min_os_string = MacOSVersion.new(min_os).strip_patch
-      rescue MacOSVersion::Error
-        return
-      end
-
-      return if min_os_string <= HOMEBREW_MACOS_OLDEST_ALLOWED
+      return if min_os.nil? || min_os <= HOMEBREW_MACOS_OLDEST_ALLOWED
 
       cask_min_os = cask.depends_on.macos&.version
-
-      return if cask_min_os == min_os_string
+      return if cask_min_os == min_os
 
       min_os_symbol = if cask_min_os.present?
         cask_min_os.to_sym.inspect
       else
         "no minimum OS version"
       end
-      add_error "Upstream defined #{min_os_string.to_sym.inspect} as the minimum OS version " \
-                "and the cask defined #{min_os_symbol}"
+      add_error "Upstream defined #{min_os.to_sym.inspect} as the minimum OS version " \
+                "and the cask defined #{min_os_symbol}",
+                strict_only: true
+    end
+
+    sig { returns(T.nilable(MacOSVersion)) }
+    def livecheck_min_os
+      return unless online?
+      return unless cask.livecheckable?
+      return if cask.livecheck.strategy != :sparkle
+
+      # `Sparkle` strategy blocks that use the `items` argument (instead of
+      # `item`) contain arbitrary logic that ignores/overrides the strategy's
+      # sorting, so we can't identify which item would be first/newest here.
+      return if cask.livecheck.strategy_block.present? &&
+                cask.livecheck.strategy_block.parameters[0] == [:opt, :items]
+
+      content = Homebrew::Livecheck::Strategy.page_content(cask.livecheck.url)[:content]
+      return if content.blank?
+
+      begin
+        items = Homebrew::Livecheck::Strategy::Sparkle.sort_items(
+          Homebrew::Livecheck::Strategy::Sparkle.filter_items(
+            Homebrew::Livecheck::Strategy::Sparkle.items_from_content(content),
+          ),
+        )
+      rescue
+        return
+      end
+      return if items.blank?
+
+      min_os = items[0]&.minimum_system_version&.strip_patch
+      # Big Sur is sometimes identified as 10.16, so we override it to the
+      # expected macOS version (11).
+      min_os = MacOSVersion.new("11") if min_os == "10.16"
+      min_os
+    end
+
+    sig { returns(T.nilable(MacOSVersion)) }
+    def cask_plist_min_os
+      return unless online?
+
+      plist_min_os = T.let(nil, T.untyped)
+      @staged_path ||= cask.staged_path
+
+      extract_artifacts do |artifacts, tmpdir|
+        artifacts.each do |artifact|
+          artifact_path = artifact.is_a?(Artifact::Pkg) ? artifact.path : artifact.source
+          path = tmpdir/artifact_path.relative_path_from(cask.staged_path)
+          plist_path = "#{path}/Contents/Info.plist"
+          next unless File.exist?(plist_path)
+
+          plist = system_command!("plutil", args: ["-convert", "xml1", "-o", "-", plist_path]).plist
+          plist_min_os = plist["LSMinimumSystemVersion"].presence
+          break if plist_min_os
+        end
+      end
+
+      begin
+        MacOSVersion.new(plist_min_os).strip_patch
+      rescue MacOSVersion::Error
+        nil
+      end
     end
 
     sig { void }
@@ -617,8 +682,8 @@ module Cask
 
     sig { void }
     def audit_github_repository_archived
-      # Discontinued casks may have an archived repo.
-      return if cask.discontinued?
+      # Deprecated/disabled casks may have an archived repo.
+      return if cask.discontinued? || cask.deprecated? || cask.disabled?
 
       user, repo = get_repo_data(%r{https?://github\.com/([^/]+)/([^/]+)/?.*}) if online?
       return if user.nil?
@@ -631,8 +696,8 @@ module Cask
 
     sig { void }
     def audit_gitlab_repository_archived
-      # Discontinued casks may have an archived repo.
-      return if cask.discontinued?
+      # Deprecated/disabled casks may have an archived repo.
+      return if cask.discontinued? || cask.deprecated? || cask.disabled?
 
       user, repo = get_repo_data(%r{https?://gitlab\.com/([^/]+)/([^/]+)/?.*}) if online?
       return if user.nil?
@@ -720,15 +785,21 @@ module Cask
 
       return unless cask.homepage
 
+      user_agents = if cask.tap&.audit_exception(:simple_user_agent_for_homepage, cask.token)
+        ["curl"]
+      else
+        [:browser, :default]
+      end
+
       validate_url_for_https_availability(cask.homepage, SharedAudits::URL_TYPE_HOMEPAGE, cask.token, cask.tap,
-                                          user_agents:   [:browser, :default],
+                                          user_agents:   user_agents,
                                           check_content: true,
                                           strict:        strict?)
     end
 
     sig { void }
     def audit_cask_path
-      return if cask.tap != "homebrew/cask"
+      return unless cask.tap.core_cask_tap?
 
       expected_path = cask.tap.new_cask_path(cask.token)
 

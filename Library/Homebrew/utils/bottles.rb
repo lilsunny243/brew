@@ -65,12 +65,14 @@ module Utils
           receipt_file = file_from_bottle(bottle_file, receipt_file_path)
           tap = Tab.from_file_content(receipt_file, "#{bottle_file}/#{receipt_file_path}").tap
           "#{tap}/#{name}" if tap.present? && !tap.core_tap?
-        elsif (bottle_json_path = Pathname(bottle_file.sub(/\.(\d+\.)?tar\.gz$/, ".json"))) &&
-              bottle_json_path.exist? &&
-              (bottle_json_path_contents = bottle_json_path.read.presence) &&
-              (bottle_json = JSON.parse(bottle_json_path_contents).presence) &&
-              bottle_json.is_a?(Hash)
-          bottle_json.keys.first.presence
+        else
+          bottle_json_path = Pathname(bottle_file.sub(/\.(\d+\.)?tar\.gz$/, ".json"))
+          if bottle_json_path.exist? &&
+             (bottle_json_path_contents = bottle_json_path.read.presence) &&
+             (bottle_json = JSON.parse(bottle_json_path_contents).presence) &&
+             bottle_json.is_a?(Hash)
+            bottle_json.keys.first.presence
+          end
         end
         full_name ||= name
 
@@ -188,7 +190,7 @@ module Utils
         elsif macos? && [:x86_64, :intel].include?(arch)
           system
         else
-          "#{standardized_arch}_#{system}".to_sym
+          :"#{standardized_arch}_#{system}"
         end
       end
 
@@ -260,6 +262,11 @@ module Utils
         @checksum = checksum
         @cellar = cellar
       end
+
+      def ==(other)
+        self.class == other.class && tag == other.tag && checksum == other.checksum && cellar == other.cellar
+      end
+      alias eql? ==
     end
 
     # Collector for bottle specifications.
@@ -273,6 +280,11 @@ module Utils
       def tags
         @tag_specs.keys
       end
+
+      def ==(other)
+        self.class == other.class && @tag_specs == other.instance_variable_get(:@tag_specs)
+      end
+      alias eql? ==
 
       sig { params(tag: Utils::Bottles::Tag, checksum: Checksum, cellar: T.any(Symbol, String)).void }
       def add(tag, checksum:, cellar:)

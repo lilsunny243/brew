@@ -16,10 +16,7 @@ require "active_support/core_ext/array/access"
 require "active_support/core_ext/enumerable"
 require "active_support/core_ext/file/atomic"
 require "active_support/core_ext/hash/deep_merge"
-require "active_support/core_ext/hash/except"
 require "active_support/core_ext/hash/keys"
-require "active_support/core_ext/object/blank"
-require "active_support/core_ext/object/try"
 require "active_support/core_ext/string/exclude"
 require "active_support/core_ext/string/filters"
 require "active_support/core_ext/string/indent"
@@ -45,10 +42,12 @@ HOMEBREW_PHYSICAL_PROCESSOR = ENV.fetch("HOMEBREW_PHYSICAL_PROCESSOR").freeze
 HOMEBREW_BREWED_CURL_PATH = Pathname(ENV.fetch("HOMEBREW_BREWED_CURL_PATH")).freeze
 HOMEBREW_USER_AGENT_CURL = ENV.fetch("HOMEBREW_USER_AGENT_CURL").freeze
 HOMEBREW_USER_AGENT_RUBY =
-  "#{ENV.fetch("HOMEBREW_USER_AGENT")} ruby/#{RUBY_VERSION}-p#{RUBY_PATCHLEVEL}"
+  "#{ENV.fetch("HOMEBREW_USER_AGENT")} ruby/#{RUBY_VERSION}-p#{RUBY_PATCHLEVEL}".freeze
 HOMEBREW_USER_AGENT_FAKE_SAFARI =
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5_1) AppleWebKit/605.1.15 " \
-  "(KHTML, like Gecko) Version/16.5 Safari/605.1.15"
+  # Don't update this beyond 10.15.7 until Safari actually updates their
+  # user agent to be beyond 10.15.7 (not the case as-of macOS 14)
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 " \
+  "(KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 HOMEBREW_GITHUB_PACKAGES_AUTH = ENV.fetch("HOMEBREW_GITHUB_PACKAGES_AUTH").freeze
 
 HOMEBREW_DEFAULT_PREFIX = ENV.fetch("HOMEBREW_GENERIC_DEFAULT_PREFIX").freeze
@@ -74,6 +73,7 @@ HOMEBREW_PULL_OR_COMMIT_URL_REGEX =
 HOMEBREW_BOTTLES_EXTNAME_REGEX = /\.([a-z0-9_]+)\.bottle\.(?:(\d+)\.)?tar\.gz$/.freeze
 
 require "extend/module"
+require "extend/blank"
 require "env_config"
 require "macos_version"
 require "os"
@@ -83,10 +83,10 @@ require "default_prefix"
 module Homebrew
   extend FileUtils
 
-  DEFAULT_CELLAR = "#{DEFAULT_PREFIX}/Cellar"
-  DEFAULT_MACOS_CELLAR = "#{HOMEBREW_DEFAULT_PREFIX}/Cellar"
-  DEFAULT_MACOS_ARM_CELLAR = "#{HOMEBREW_MACOS_ARM_DEFAULT_PREFIX}/Cellar"
-  DEFAULT_LINUX_CELLAR = "#{HOMEBREW_LINUX_DEFAULT_PREFIX}/Cellar"
+  DEFAULT_CELLAR = "#{DEFAULT_PREFIX}/Cellar".freeze
+  DEFAULT_MACOS_CELLAR = "#{HOMEBREW_DEFAULT_PREFIX}/Cellar".freeze
+  DEFAULT_MACOS_ARM_CELLAR = "#{HOMEBREW_MACOS_ARM_DEFAULT_PREFIX}/Cellar".freeze
+  DEFAULT_LINUX_CELLAR = "#{HOMEBREW_LINUX_DEFAULT_PREFIX}/Cellar".freeze
 
   class << self
     attr_writer :failed, :raise_deprecation_exceptions, :auditing

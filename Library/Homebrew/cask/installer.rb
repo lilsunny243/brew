@@ -93,6 +93,7 @@ module Cask
       old_config = @cask.config
       predecessor = @cask if reinstall? && @cask.installed?
 
+      check_deprecate_disable
       check_conflicts
 
       print caveats
@@ -122,6 +123,18 @@ on_request: true)
     rescue
       restore_backup
       raise
+    end
+
+    def check_deprecate_disable
+      deprecate_disable_type = DeprecateDisable.type(@cask)
+      return if deprecate_disable_type.nil?
+
+      case deprecate_disable_type
+      when :deprecated
+        opoo "#{@cask.token} has been #{DeprecateDisable.message(@cask)}"
+      when :disabled
+        raise CaskCannotBeInstalledError.new(@cask, DeprecateDisable.message(@cask))
+      end
     end
 
     def check_conflicts
@@ -300,12 +313,12 @@ on_request: true)
 
     def missing_cask_and_formula_dependencies
       cask_and_formula_dependencies.reject do |cask_or_formula|
-        installed = if cask_or_formula.respond_to?(:any_version_installed?)
-          cask_or_formula.any_version_installed?
-        else
-          cask_or_formula.try(:installed?)
+        case cask_or_formula
+        when Formula
+          cask_or_formula.any_version_installed? && cask_or_formula.optlinked?
+        when Cask
+          cask_or_formula.installed?
         end
-        installed && (cask_or_formula.respond_to?(:optlinked?) ? cask_or_formula.optlinked? : true)
       end
     end
 

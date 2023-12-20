@@ -298,9 +298,10 @@ module Utils
       end
 
       details = T.let(nil, T.nilable(T::Hash[Symbol, T.untyped]))
+      attempts = 0
       user_agents.each do |user_agent|
-        details =
-          curl_http_content_headers_and_checksum(
+        loop do
+          details = curl_http_content_headers_and_checksum(
             url,
             specs:             specs,
             hash_needed:       hash_needed,
@@ -308,15 +309,18 @@ module Utils
             user_agent:        user_agent,
             referer:           referer,
           )
+
+          # Retry on network issues
+          break if details[:exit_status] != 52 && details[:exit_status] != 56
+
+          attempts += 1
+          break if attempts >= Homebrew::EnvConfig.curl_retries.to_i
+        end
+
         break if http_status_ok?(details[:status_code])
       end
 
-      unless details[:status_code]
-        # Hack around https://github.com/Homebrew/brew/issues/3199
-        return if MacOS.version == :el_capitan
-
-        return "The #{url_type} #{url} is not reachable"
-      end
+      return "The #{url_type} #{url} is not reachable" unless details[:status_code]
 
       unless http_status_ok?(details[:status_code])
         return if details[:responses].any? do |response|
@@ -447,12 +451,13 @@ module Utils
           end
         end
         file_contents = File.read(T.must(file.path), **open_args)
-        file_hash = Digest::SHA2.hexdigest(file_contents) if hash_needed
+        file_hash = Digest::SHA256.hexdigest(file_contents) if hash_needed
       end
 
       {
         url:            url,
         final_url:      final_url,
+        exit_status:    status.exitstatus,
         status_code:    status_code,
         headers:        headers,
         etag:           etag,

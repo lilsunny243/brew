@@ -38,7 +38,7 @@ then
   HOMEBREW_DEFAULT_LOGS="${HOME}/Library/Logs/Homebrew"
   HOMEBREW_DEFAULT_TEMP="/private/tmp"
 else
-  CACHE_HOME="${XDG_CACHE_HOME:-${HOME}/.cache}"
+  CACHE_HOME="${HOMEBREW_XDG_CACHE_HOME:-${HOME}/.cache}"
   HOMEBREW_DEFAULT_CACHE="${CACHE_HOME}/Homebrew"
   HOMEBREW_DEFAULT_LOGS="${CACHE_HOME}/Homebrew/Logs"
   HOMEBREW_DEFAULT_TEMP="/tmp"
@@ -485,8 +485,8 @@ HOMEBREW_VERSION="$("${HOMEBREW_GIT}" -C "${HOMEBREW_REPOSITORY}" describe --tag
 HOMEBREW_USER_AGENT_VERSION="${HOMEBREW_VERSION}"
 if [[ -z "${HOMEBREW_VERSION}" ]]
 then
-  HOMEBREW_VERSION=">=2.5.0 (shallow or no git repository)"
-  HOMEBREW_USER_AGENT_VERSION="2.X.Y"
+  HOMEBREW_VERSION=">=4.1.0 (shallow or no git repository)"
+  HOMEBREW_USER_AGENT_VERSION="4.X.Y"
 fi
 
 HOMEBREW_CORE_REPOSITORY="${HOMEBREW_LIBRARY}/Taps/homebrew/homebrew-core"
@@ -502,14 +502,17 @@ case "$*" in
     ;;
 esac
 
-# TODO: bump version when new macOS is released or announced
-# and also update references in docs/Installation.md,
-# https://github.com/Homebrew/install/blob/HEAD/install.sh and
-# MacOSVersion::SYMBOLS
+# TODO: bump version when new macOS is released or announced and update references in:
+# - docs/Installation.md
+# - https://github.com/Homebrew/install/blob/HEAD/install.sh
+# and, if needed:
+# - MacOSVersion::SYMBOLS
 HOMEBREW_MACOS_NEWEST_UNSUPPORTED="15"
-# TODO: bump version when new macOS is released and also update
-# references in docs/Installation.md and
-# https://github.com/Homebrew/install/blob/HEAD/install.sh
+# TODO: bump version when new macOS is released and update references in:
+# - docs/Installation.md
+# - HOMEBREW_MACOS_OLDEST_SUPPORTED in .github/workflows/pkg-installer.yml
+# - `os-version min` in package/Distribution.xml
+# - https://github.com/Homebrew/install/blob/HEAD/install.sh
 HOMEBREW_MACOS_OLDEST_SUPPORTED="12"
 HOMEBREW_MACOS_OLDEST_ALLOWED="10.11"
 
@@ -580,17 +583,6 @@ then
       HOMEBREW_FORCE_BREWED_GIT="1"
     fi
   fi
-
-  # Set a variable when the macOS system Ruby is new enough to avoid spawning
-  # a Ruby process unnecessarily.
-  if [[ "${HOMEBREW_MACOS_VERSION_NUMERIC}" -lt "120601" ]]
-  then
-    unset HOMEBREW_MACOS_SYSTEM_RUBY_NEW_ENOUGH
-  else
-    # Used in ruby.sh.
-    # shellcheck disable=SC2034
-    HOMEBREW_MACOS_SYSTEM_RUBY_NEW_ENOUGH="1"
-  fi
 else
   HOMEBREW_PRODUCT="${HOMEBREW_SYSTEM}brew"
   # Don't try to follow /etc/os-release
@@ -654,7 +646,6 @@ Your Git executable: $(unset git && type -p "${HOMEBREW_GIT}")"
   fi
 
   HOMEBREW_LINUX_MINIMUM_GLIBC_VERSION="2.13"
-  unset HOMEBREW_MACOS_SYSTEM_RUBY_NEW_ENOUGH
 
   HOMEBREW_CORE_REPOSITORY_ORIGIN="$("${HOMEBREW_GIT}" -C "${HOMEBREW_CORE_REPOSITORY}" remote get-url origin 2>/dev/null)"
   if [[ "${HOMEBREW_CORE_REPOSITORY_ORIGIN}" =~ (/linuxbrew|Linuxbrew/homebrew)-core(\.git)?$ ]]
@@ -745,7 +736,6 @@ export HOMEBREW_USER_AGENT
 export HOMEBREW_USER_AGENT_CURL
 export HOMEBREW_API_DEFAULT_DOMAIN
 export HOMEBREW_BOTTLE_DEFAULT_DOMAIN
-export HOMEBREW_MACOS_SYSTEM_RUBY_NEW_ENOUGH
 export HOMEBREW_CURL_SPEED_LIMIT
 export HOMEBREW_CURL_SPEED_TIME
 

@@ -23,10 +23,11 @@ module Cask
 
     attr_predicate :loaded_from_api?
 
+    # @api private
     def self.all
-      # TODO: ideally avoid using ARGV by moving to e.g. CLI::Parser
+      # TODO: replace this ARGV and ENV logic with an argument, like how we do with formulae
       if ARGV.exclude?("--eval-all") && !Homebrew::EnvConfig.eval_all?
-        odisabled "Cask::Cask#all without --eval-all or HOMEBREW_EVAL_ALL"
+        raise ArgumentError, "Cask::Cask#all cannot be used without --eval-all or HOMEBREW_EVAL_ALL"
       end
 
       Tap.flat_map(&:cask_files).map do |f|
@@ -121,7 +122,7 @@ module Cask
 
     def full_name
       return token if tap.nil?
-      return token if tap.user == "Homebrew"
+      return token if tap.core_cask_tap?
 
       "#{tap.name}/#{token}"
     end
@@ -321,6 +322,7 @@ module Cask
         "appcast"              => appcast,
         "version"              => version,
         "installed"            => installed_version,
+        "installed_time"       => install_time&.to_i,
         "outdated"             => outdated?,
         "sha256"               => sha256,
         "artifacts"            => artifacts_list,
@@ -329,6 +331,12 @@ module Cask
         "conflicts_with"       => conflicts_with,
         "container"            => container&.pairs,
         "auto_updates"         => auto_updates,
+        "deprecated"           => deprecated?,
+        "deprecation_date"     => deprecation_date,
+        "deprecation_reason"   => deprecation_reason,
+        "disabled"             => disabled?,
+        "disable_date"         => disable_date,
+        "disable_reason"       => disable_reason,
         "tap_git_head"         => tap_git_head,
         "languages"            => languages,
         "ruby_source_path"     => ruby_source_path,

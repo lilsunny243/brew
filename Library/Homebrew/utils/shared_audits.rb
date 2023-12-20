@@ -52,7 +52,7 @@ module SharedAudits
       return "#{tag} is not a GitHub pre-release but '#{name}' is in the GitHub prerelease allowlist."
     end
 
-    return "#{tag} is a GitHub draft." if release["draft"]
+    "#{tag} is a GitHub draft." if release["draft"]
   end
 
   def gitlab_repo_data(user, repo)
@@ -157,7 +157,7 @@ module SharedAudits
 
   def github_tag_from_url(url)
     url = url.to_s
-    tag = url.match(%r{^https://github\.com/[\w-]+/[\w-]+/archive/([^/]+)\.(tar\.gz|zip)$})
+    tag = url.match(%r{^https://github\.com/[\w-]+/[\w-]+/archive/refs/tags/([^/]+)\.(tar\.gz|zip)$})
              .to_a
              .second
     tag ||= url.match(%r{^https://github\.com/[\w-]+/[\w-]+/releases/download/([^/]+)/})

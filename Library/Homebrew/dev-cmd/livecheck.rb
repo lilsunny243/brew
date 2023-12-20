@@ -54,7 +54,7 @@ module Homebrew
       unless File.exist?(watchlist)
         previous_default_watchlist = File.expand_path("~/.brew_livecheck_watchlist")
         if File.exist?(previous_default_watchlist)
-          odeprecated "~/.brew_livecheck_watchlist", "~/.homebrew/livecheck_watchlist.txt"
+          odisabled "~/.brew_livecheck_watchlist", "~/.homebrew/livecheck_watchlist.txt"
           watchlist = previous_default_watchlist
         end
       end
@@ -66,7 +66,7 @@ module Homebrew
   def livecheck
     args = livecheck_args.parse
 
-    Homebrew.install_bundler_gems!(groups: ["livecheck"]) if args.json?
+    Homebrew.install_bundler_gems!(groups: ["livecheck"])
 
     all = args.eval_all?
 
