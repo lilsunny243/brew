@@ -1,8 +1,6 @@
 # typed: true
 # frozen_string_literal: true
 
-# Disable Rails cops, as we haven't required active_support yet.
-# rubocop:disable Rails
 homebrew_bootsnap_enabled = ENV["HOMEBREW_NO_BOOTSNAP"].nil? && !ENV["HOMEBREW_BOOTSNAP"].nil?
 
 # we need some development tools to build bootsnap native code
@@ -16,12 +14,12 @@ if homebrew_bootsnap_enabled
   begin
     require "bootsnap"
   rescue LoadError
-    unless ENV["HOMEBREW_BOOTSNAP_RETRY"]
-      Homebrew.install_bundler_gems!(groups: ["bootsnap"], only_warn_on_failure: true)
+    raise if ENV["HOMEBREW_BOOTSNAP_RETRY"]
 
-      ENV["HOMEBREW_BOOTSNAP_RETRY"] = "1"
-      exec ENV.fetch("HOMEBREW_BREW_FILE"), *ARGV
-    end
+    Homebrew.install_bundler_gems!(groups: ["bootsnap"], only_warn_on_failure: true)
+
+    ENV["HOMEBREW_BOOTSNAP_RETRY"] = "1"
+    exec ENV.fetch("HOMEBREW_BREW_FILE"), *ARGV
   end
 
   ENV.delete("HOMEBREW_BOOTSNAP_RETRY")
@@ -40,7 +38,7 @@ if homebrew_bootsnap_enabled
 
     Bootsnap.setup(
       cache_dir:          cache,
-      ignore_directories: ignore_directories,
+      ignore_directories:,
       load_path_cache:    true,
       compile_cache_iseq: true,
       compile_cache_yaml: true,
@@ -49,4 +47,3 @@ if homebrew_bootsnap_enabled
     $stderr.puts "Error: HOMEBREW_BOOTSNAP could not `require \"bootsnap\"`!\n\n"
   end
 end
-# rubocop:enable Rails

@@ -10,8 +10,6 @@ require "utils/topological_hash"
 
 module Homebrew
   # Helper functions for upgrading formulae.
-  #
-  # @api private
   module Upgrade
     module_function
 
@@ -27,6 +25,7 @@ module Homebrew
       keep_tmp: false,
       debug_symbols: false,
       force: false,
+      overwrite: false,
       debug: false,
       quiet: false,
       verbose: false
@@ -52,22 +51,23 @@ module Homebrew
         raise CyclicDependencyError, dependency_graph.strongly_connected_components if Homebrew::EnvConfig.developer?
       end
 
-      formula_installers = formulae_to_install.map do |formula|
-        Migrator.migrate_if_needed(formula, force: force, dry_run: dry_run)
+      formula_installers = formulae_to_install.filter_map do |formula|
+        Migrator.migrate_if_needed(formula, force:, dry_run:)
         begin
           fi = create_formula_installer(
             formula,
-            flags:                      flags,
-            installed_on_request:       installed_on_request,
-            force_bottle:               force_bottle,
-            build_from_source_formulae: build_from_source_formulae,
-            interactive:                interactive,
-            keep_tmp:                   keep_tmp,
-            debug_symbols:              debug_symbols,
-            force:                      force,
-            debug:                      debug,
-            quiet:                      quiet,
-            verbose:                    verbose,
+            flags:,
+            installed_on_request:,
+            force_bottle:,
+            build_from_source_formulae:,
+            interactive:,
+            keep_tmp:,
+            debug_symbols:,
+            force:,
+            overwrite:,
+            debug:,
+            quiet:,
+            verbose:,
           )
           unless dry_run
             fi.prelude
@@ -114,11 +114,11 @@ module Homebrew
           ofail "#{formula}: #{e}"
           nil
         end
-      end.compact
+      end
 
       formula_installers.each do |fi|
-        upgrade_formula(fi, dry_run: dry_run, verbose: verbose)
-        Cleanup.install_formula_clean!(fi.formula, dry_run: dry_run)
+        upgrade_formula(fi, dry_run:, verbose:)
+        Cleanup.install_formula_clean!(fi.formula, dry_run:)
       end
     end
 
@@ -134,10 +134,8 @@ module Homebrew
       else
         "-> #{formula.pkg_version}"
       end
-      oh1 <<~EOS
-        Upgrading #{Formatter.identifier(formula.full_specified_name)}
-          #{version_upgrade} #{fi_options.to_a.join(" ")}
-      EOS
+      oh1 "Upgrading #{Formatter.identifier(formula.full_specified_name)}"
+      puts "  #{version_upgrade} #{fi_options.to_a.join(" ")}"
     end
 
     def create_formula_installer(
@@ -150,6 +148,7 @@ module Homebrew
       keep_tmp: false,
       debug_symbols: false,
       force: false,
+      overwrite: false,
       debug: false,
       quiet: false,
       verbose: false
@@ -162,7 +161,7 @@ module Homebrew
 
       if formula.opt_prefix.directory?
         keg = Keg.new(formula.opt_prefix.resolved_path)
-        tab = Tab.for_keg(keg)
+        tab = keg.tab
       end
 
       build_options = BuildOptions.new(Options.create(flags), formula.options)
@@ -173,20 +172,21 @@ module Homebrew
       FormulaInstaller.new(
         formula,
         **{
-          options:                    options,
+          options:,
           link_keg:                   keg_had_linked_opt ? keg_was_linked : nil,
           installed_as_dependency:    tab&.installed_as_dependency,
           installed_on_request:       installed_on_request || tab&.installed_on_request,
           build_bottle:               tab&.built_bottle?,
-          force_bottle:               force_bottle,
-          build_from_source_formulae: build_from_source_formulae,
-          interactive:                interactive,
-          keep_tmp:                   keep_tmp,
-          debug_symbols:              debug_symbols,
-          force:                      force,
-          debug:                      debug,
-          quiet:                      quiet,
-          verbose:                    verbose,
+          force_bottle:,
+          build_from_source_formulae:,
+          interactive:,
+          keep_tmp:,
+          debug_symbols:,
+          force:,
+          overwrite:,
+          debug:,
+          quiet:,
+          verbose:,
         }.compact,
       )
     end
@@ -209,7 +209,7 @@ module Homebrew
 
       install_formula(formula_installer, upgrade: true)
     rescue BuildError => e
-      e.dump(verbose: verbose)
+      e.dump(verbose:)
       puts
       Homebrew.failed = true
     end
@@ -366,18 +366,18 @@ module Homebrew
       unless dry_run
         upgrade_formulae(
           upgradeable_dependents,
-          flags:                      flags,
-          installed_on_request:       installed_on_request,
-          force_bottle:               force_bottle,
-          build_from_source_formulae: build_from_source_formulae,
+          flags:,
+          installed_on_request:,
+          force_bottle:,
+          build_from_source_formulae:,
           dependents:                 true,
-          interactive:                interactive,
-          keep_tmp:                   keep_tmp,
-          debug_symbols:              debug_symbols,
-          force:                      force,
-          debug:                      debug,
-          quiet:                      quiet,
-          verbose:                    verbose,
+          interactive:,
+          keep_tmp:,
+          debug_symbols:,
+          force:,
+          debug:,
+          quiet:,
+          verbose:,
         )
       end
 
@@ -436,16 +436,16 @@ module Homebrew
       reinstallable_broken_dependents.each do |formula|
         Homebrew.reinstall_formula(
           formula,
-          flags:                      flags,
-          force_bottle:               force_bottle,
+          flags:,
+          force_bottle:,
           build_from_source_formulae: build_from_source_formulae + [formula.full_name],
-          interactive:                interactive,
-          keep_tmp:                   keep_tmp,
-          debug_symbols:              debug_symbols,
-          force:                      force,
-          debug:                      debug,
-          quiet:                      quiet,
-          verbose:                    verbose,
+          interactive:,
+          keep_tmp:,
+          debug_symbols:,
+          force:,
+          debug:,
+          quiet:,
+          verbose:,
         )
       rescue FormulaInstallationAlreadyAttemptedError
         # We already attempted to reinstall f as part of the dependency tree of
@@ -454,7 +454,7 @@ module Homebrew
       rescue CannotInstallFormulaError, DownloadError => e
         ofail e
       rescue BuildError => e
-        e.dump(verbose: verbose)
+        e.dump(verbose:)
         puts
         Homebrew.failed = true
       end

@@ -5,6 +5,8 @@ require "shellwords"
 require "utils"
 
 # Raised when a command is used wrong.
+#
+# @api internal
 class UsageError < RuntimeError
   attr_reader :reason
 
@@ -47,6 +49,9 @@ class UnsupportedInstallationMethod < RuntimeError; end
 
 class MultipleVersionsInstalledError < RuntimeError; end
 
+# Raised when a path is not a keg.
+#
+# @api internal
 class NotAKegError < RuntimeError; end
 
 # Raised when a keg doesn't exist.
@@ -73,8 +78,6 @@ end
 class FormulaSpecificationError < StandardError; end
 
 # Raised when a deprecated method is used.
-#
-# @api private
 class MethodDeprecatedError < StandardError
   attr_accessor :issues_url
 end
@@ -133,6 +136,8 @@ class TapFormulaOrCaskUnavailableError < FormulaOrCaskUnavailableError
 end
 
 # Raised when a formula is not available.
+#
+# @api internal
 class FormulaUnavailableError < FormulaOrCaskUnavailableError
   attr_accessor :dependent
 
@@ -148,11 +153,10 @@ class FormulaUnavailableError < FormulaOrCaskUnavailableError
 end
 
 # Shared methods for formula class errors.
-#
-# @api private
 module FormulaClassUnavailableErrorModule
   attr_reader :path, :class_name, :class_list
 
+  sig { returns(String) }
   def to_s
     s = super
     s += "\nIn formula file: #{path}"
@@ -192,8 +196,6 @@ class FormulaClassUnavailableError < FormulaUnavailableError
 end
 
 # Shared methods for formula unreadable errors.
-#
-# @api private
 module FormulaUnreadableErrorModule
   attr_reader :formula_error
 
@@ -225,6 +227,7 @@ class TapFormulaUnavailableError < FormulaUnavailableError
     super "#{tap}/#{name}"
   end
 
+  sig { returns(String) }
   def to_s
     s = super
     s += "\nPlease tap it and then try again: brew tap #{tap}" unless tap.installed?
@@ -259,40 +262,20 @@ end
 
 # Raised when a formula with the same name is found in multiple taps.
 class TapFormulaAmbiguityError < RuntimeError
-  attr_reader :name, :paths, :formulae
+  attr_reader :name, :taps, :loaders
 
-  def initialize(name, paths)
+  def initialize(name, loaders)
     @name = name
-    @paths = paths
-    @formulae = paths.map do |path|
-      "#{Tap.from_path(path).name}/#{path.basename(".rb")}"
-    end
+    @loaders = loaders
+    @taps = loaders.map(&:tap)
+
+    formulae = taps.map { |tap| "#{tap}/#{name}" }
+    formula_list = formulae.map { |f| "\n       * #{f}" }.join
 
     super <<~EOS
-      Formulae found in multiple taps: #{formulae.map { |f| "\n       * #{f}" }.join}
+      Formulae found in multiple taps:#{formula_list}
 
-      Please use the fully-qualified name (e.g. #{formulae.first}) to refer to the formula.
-    EOS
-  end
-end
-
-# Raised when a formula's old name in a specific tap is found in multiple taps.
-class TapFormulaWithOldnameAmbiguityError < RuntimeError
-  attr_reader :name, :possible_tap_newname_formulae, :taps
-
-  def initialize(name, possible_tap_newname_formulae)
-    @name = name
-    @possible_tap_newname_formulae = possible_tap_newname_formulae
-
-    @taps = possible_tap_newname_formulae.map do |newname|
-      newname =~ HOMEBREW_TAP_FORMULA_REGEX
-      "#{Regexp.last_match(1)}/#{Regexp.last_match(2)}"
-    end
-
-    super <<~EOS
-      Formulae with '#{name}' old name found in multiple taps: #{taps.map { |t| "\n       * #{t}" }.join}
-
-      Please use the fully-qualified name (e.g. #{taps.first}/#{name}) to refer to the formula or use its new name.
+      Please use the fully-qualified name (e.g. #{formulae.first}) to refer to a specific formula.
     EOS
   end
 end
@@ -436,7 +419,7 @@ class FormulaConflictError < RuntimeError
       Please `brew unlink #{conflicts.map(&:name) * " "}` before continuing.
 
       Unlinking removes a formula's symlinks from #{HOMEBREW_PREFIX}. You can
-      link the formula again after the install finishes. You can --force this
+      link the formula again after the install finishes. You can `--force` this
       install, but the build may fail or cause obscure side effects in the
       resulting software.
     EOS
@@ -500,8 +483,8 @@ class BuildError < RuntimeError
   sig { returns(T::Array[T.untyped]) }
   def fetch_issues
     GitHub.issues_for_formula(formula.name, tap: formula.tap, state: "open", type: "issue")
-  rescue GitHub::API::RateLimitExceededError => e
-    opoo e.message
+  rescue GitHub::API::Error => e
+    opoo "Unable to query GitHub for recent issues on the tap\n#{e.message}"
     []
   end
 
@@ -582,7 +565,7 @@ class UnbottledError < RuntimeError
   end
 end
 
-# Raised by Homebrew.install, Homebrew.reinstall, and Homebrew.upgrade
+# Raised by `Homebrew.install`, `Homebrew.reinstall` and `Homebrew.upgrade`
 # if the user passes any flags/environment that would case a bottle-only
 # installation on a system without build tools to fail.
 class BuildFlagsError < RuntimeError

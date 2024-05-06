@@ -68,6 +68,15 @@ class Formula
   sig { params(args: T.untyped, options: T.untyped, block: T.untyped).returns(T.untyped) }
   def version(*args, **options, &block); end
 
+  sig { params(args: T.untyped, options: T.untyped, block: T.untyped).returns(T.untyped) }
+  def allow_network_access!(*args, **options, &block); end
+
+  sig { params(args: T.untyped, options: T.untyped, block: T.untyped).returns(T.untyped) }
+  def deny_network_access!(*args, **options, &block); end
+
+  sig { params(args: T.untyped, options: T.untyped, block: T.untyped).returns(T::Boolean) }
+  def network_access_allowed?(*args, **options, &block); end
+
   sig { params(args: T.untyped, options: T.untyped, block: T.untyped).returns(T::Boolean) }
   def loaded_from_api?(*args, **options, &block); end
 
@@ -79,12 +88,6 @@ class Formula
 
   sig { params(args: T.untyped, options: T.untyped, block: T.untyped).returns(T.untyped) }
   def declared_deps(*args, **options, &block); end
-
-  sig { params(args: T.untyped, options: T.untyped, block: T.untyped).returns(T.untyped) }
-  def uses_from_macos_elements(*args, **options, &block); end
-
-  sig { params(args: T.untyped, options: T.untyped, block: T.untyped).returns(T.untyped) }
-  def uses_from_macos_names(*args, **options, &block); end
 
   sig { params(args: T.untyped, options: T.untyped, block: T.untyped).returns(T.untyped) }
   def requirements(*args, **options, &block); end
@@ -151,9 +154,6 @@ class Formula
 
   sig { params(args: T.untyped, options: T.untyped, block: T.untyped).returns(T.untyped) }
   def env(*args, **options, &block); end
-
-  sig { params(args: T.untyped, options: T.untyped, block: T.untyped).returns(T.untyped) }
-  def conflicts(*args, **options, &block); end
 
   sig { returns(T::Boolean) }
   def self.loaded_from_api?; end

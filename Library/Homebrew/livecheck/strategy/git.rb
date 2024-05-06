@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require "open3"
+require "system_command"
 
 module Homebrew
   module Livecheck
@@ -12,7 +13,7 @@ module Homebrew
       # Livecheck has historically prioritized the {Git} strategy over others
       # and this behavior was continued when the priority setup was created.
       # This is partly related to Livecheck checking formula URLs in order of
-      # `head`, `stable`, and then `homepage`. The higher priority here may
+      # `head`, `stable` and then `homepage`. The higher priority here may
       # be removed (or altered) in the future if we reevaluate this particular
       # behavior.
       #
@@ -24,13 +25,15 @@ module Homebrew
       #
       # @api public
       class Git
+        extend SystemCommand::Mixin
+
         # The priority of the strategy on an informal scale of 1 to 10 (from
         # lowest to highest).
         PRIORITY = 8
 
         # The default regex used to naively identify versions from tags when a
         # regex isn't provided.
-        DEFAULT_REGEX = /\D*(.+)/.freeze
+        DEFAULT_REGEX = /\D*(.+)/
 
         # Whether the strategy can be applied to the provided URL.
         #
@@ -66,7 +69,7 @@ module Homebrew
 
           # Isolate tag strings and filter by regex
           tags = stdout.gsub(%r{^.*\trefs/tags/|\^{}$}, "").split("\n").uniq.sort
-          tags.select! { |t| t =~ regex } if regex
+          tags.select! { |t| regex.match?(t) } if regex
           tags_data[:tags] = tags
 
           tags_data
@@ -98,7 +101,7 @@ module Homebrew
             return Strategy.handle_block_return(block_return_value)
           end
 
-          tags.map do |tag|
+          tags.filter_map do |tag|
             if regex
               # Use the first capture group (the version)
               # This code is not typesafe unless the regex includes a capture group
@@ -108,7 +111,7 @@ module Homebrew
               # version text
               tag[DEFAULT_REGEX, 1]
             end
-          end.compact.uniq
+          end.uniq
         end
 
         # Checks the Git tags for new versions. When a regex isn't provided,
@@ -122,12 +125,12 @@ module Homebrew
           params(
             url:     String,
             regex:   T.nilable(Regexp),
-            _unused: T.nilable(T::Hash[Symbol, T.untyped]),
+            _unused: T.untyped,
             block:   T.nilable(Proc),
           ).returns(T::Hash[Symbol, T.untyped])
         }
         def self.find_versions(url:, regex: nil, **_unused, &block)
-          match_data = { matches: {}, regex: regex, url: url }
+          match_data = { matches: {}, regex:, url: }
 
           tags_data = tag_info(url, regex)
           tags = tags_data[:tags]

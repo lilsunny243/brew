@@ -8,16 +8,15 @@ module Homebrew
       formula.versioned_formulae
              .select(&:keg_only?)
              .select(&:linked?)
-             .map(&:any_installed_keg)
-             .compact
+             .filter_map(&:any_installed_keg)
              .select(&:directory?)
              .each do |keg|
-        unlink(keg, verbose: verbose)
+        unlink(keg, verbose:)
       end
     end
 
     def self.unlink(keg, dry_run: false, verbose: false)
-      options = { dry_run: dry_run, verbose: verbose }
+      options = { dry_run:, verbose: }
 
       keg.lock do
         print "Unlinking #{keg}... "

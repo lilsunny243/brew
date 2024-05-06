@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -p
 set -u
 
 # Fail fast with concise message when not using bash
@@ -12,10 +12,20 @@ fi
 
 set +o posix # as we are using bash now
 
-# Fail fast with concise message when cwd does not exist
+# Fail fast with concise messages when PWD has issues
+if [[ -z "${PWD-}" ]]
+then
+  echo "Error: \$PWD must be set to run brew." >&2
+  exit 1
+fi
 if ! [[ -d "${PWD}" ]]
 then
-  echo "Error: The current working directory doesn't exist, cannot proceed." >&2
+  echo "Error: The current working directory must exist to run brew." >&2
+  exit 1
+fi
+if ! [[ -r "${PWD}" ]]
+then
+  echo "Error: The current working directory must be readable to ${USER} to run brew." >&2
   exit 1
 fi
 
@@ -154,7 +164,10 @@ USED_BY_HOMEBREW_VARS=(
   CODESPACES
   COLORTERM
   DBUS_SESSION_BUS_ADDRESS
+  NODENV_ROOT
   PATH
+  PYENV_ROOT
+  RBENV_ROOT
   SSH_TTY
   SUDO_USER
   TMUX
@@ -232,4 +245,4 @@ then
 fi
 unset VAR ENV_VAR_NAMES
 
-exec /usr/bin/env -i "${FILTERED_ENV[@]}" /bin/bash "${HOMEBREW_LIBRARY}/Homebrew/brew.sh" "$@"
+exec /usr/bin/env -i "${FILTERED_ENV[@]}" /bin/bash -p "${HOMEBREW_LIBRARY}/Homebrew/brew.sh" "$@"

@@ -4,8 +4,6 @@
 require "json"
 
 module Cask
-  #
-  # @api private
   class Info
     def self.get_info(cask)
       require "cask/installer"
@@ -48,7 +46,7 @@ module Cask
         Formatter.error("does not exist")
       end
 
-      "#{versioned_staged_path} (#{path_details})\n"
+      "Installed\n#{versioned_staged_path} (#{path_details})\n"
     end
 
     def self.name_info(cask)

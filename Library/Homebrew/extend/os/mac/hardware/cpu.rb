@@ -83,10 +83,14 @@ module Hardware
         sysctl_bool("hw.optional.sse4_2")
       end
 
-      # NOTE: this is more reliable than checking uname.
-      # `sysctl` returns the right answer even when running in Rosetta 2.
+      # NOTE: This is more reliable than checking `uname`. `sysctl` returns
+      #       the right answer even when running in Rosetta 2.
       def physical_cpu_arm64?
         sysctl_bool("hw.optional.arm64")
+      end
+
+      def virtualized?
+        sysctl_bool("kern.hv_vmm_present")
       end
 
       private
@@ -109,9 +113,15 @@ module Hardware
           :arm_firestorm_icestorm
         when 0xda33d83d             # ARMv8.5-A (Blizzard, Avalanche)
           :arm_blizzard_avalanche
-        when 0x8765edea             # ARMv8.6-A (Everest, Sawtooth)
-          :arm_everest_sawtooth
+        when 0xfa33415e             # ARMv8.6-A (M3, Ibiza)
+          :arm_ibiza
+        when 0x5f4dea93             # ARMv8.6-A (M3 Pro, Lobos)
+          :arm_lobos
+        when 0x72015832             # ARMv8.6-A (M3 Max, Palma)
+          :arm_palma
         else
+          # When adding new ARM CPU families, please also update
+          # test/hardware/cpu_spec.rb to include the new families.
           :dunno
         end
       end

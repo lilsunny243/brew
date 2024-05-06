@@ -9,8 +9,6 @@ require "extend/on_system"
 # Resource is the fundamental representation of an external resource. The
 # primary formula download, along with other declared resources, are instances
 # of this class.
-#
-# @api private
 class Resource < Downloadable
   include FileUtils
   include OnSystem::MacOSAndLinux
@@ -95,7 +93,7 @@ class Resource < Downloadable
     fetch_patches(skip_downloaded: true)
     fetch unless downloaded?
 
-    unpack(target, debug_symbols: debug_symbols, &block)
+    unpack(target, debug_symbols:, &block)
   end
 
   def prepare_patches
@@ -121,7 +119,7 @@ class Resource < Downloadable
   # A target or a block must be given, but not both.
   def unpack(target = nil, debug_symbols: false)
     current_working_directory = Pathname.pwd
-    stage_resource(download_name, debug_symbols: debug_symbols) do |staging|
+    stage_resource(download_name, debug_symbols:) do |staging|
       downloader.stage do
         @source_modified_time = downloader.source_modified_time
         apply_patches
@@ -145,20 +143,25 @@ class Resource < Downloadable
   def fetch(verify_download_integrity: true)
     fetch_patches
 
-    super(verify_download_integrity: verify_download_integrity)
+    super(verify_download_integrity:)
   end
 
-  # @!attribute [w] livecheck
   # {Livecheck} can be used to check for newer versions of the software.
   # This method evaluates the DSL specified in the livecheck block of the
   # {Resource} (if it exists) and sets the instance variables of a {Livecheck}
   # object accordingly. This is used by `brew livecheck` to check for newer
   # versions of the software.
   #
-  # <pre>livecheck do
+  # ### Example
+  #
+  # ```ruby
+  # livecheck do
   #   url "https://example.com/foo/releases"
   #   regex /foo-(\d+(?:\.\d+)+)\.tar/
-  # end</pre>
+  # end
+  # ```
+  #
+  # @!attribute [w] livecheck
   def livecheck(&block)
     return @livecheck unless block
 
@@ -167,8 +170,8 @@ class Resource < Downloadable
   end
 
   # Whether a livecheck specification is defined or not.
-  # It returns true when a livecheck block is present in the {Resource} and
-  # false otherwise, and is used by livecheck.
+  # It returns true when a `livecheck` block is present in the {Resource} and
+  # false otherwise and is used by livecheck.
   def livecheckable?
     @livecheckable == true
   end
@@ -287,13 +290,12 @@ end
 # The context in which a {Resource#stage} occurs. Supports access to both
 # the {Resource} and associated {Mktemp} in a single block argument. The interface
 # is back-compatible with {Resource} itself as used in that context.
-#
-# @api private
 class ResourceStageContext
   extend Forwardable
 
   # The {Resource} that is being staged.
   attr_reader :resource
+
   # The {Mktemp} in which {#resource} is staged.
   attr_reader :staging
 

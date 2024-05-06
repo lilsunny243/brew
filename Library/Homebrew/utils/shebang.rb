@@ -3,14 +3,10 @@
 
 module Utils
   # Helper functions for manipulating shebang lines.
-  #
-  # @api private
   module Shebang
     module_function
 
     # Specification on how to rewrite a given shebang.
-    #
-    # @api private
     class RewriteInfo
       attr_reader :regex, :max_length, :replacement
 
@@ -24,8 +20,11 @@ module Utils
 
     # Rewrite shebang for the given `paths` using the given `rewrite_info`.
     #
-    # @example
-    #   rewrite_shebang detected_python_shebang, bin/"script.py"
+    # ### Example
+    #
+    # ```ruby
+    # rewrite_shebang detected_python_shebang, bin/"script.py"
+    # ```
     #
     # @api public
     sig { params(rewrite_info: RewriteInfo, paths: T.any(String, Pathname)).void }

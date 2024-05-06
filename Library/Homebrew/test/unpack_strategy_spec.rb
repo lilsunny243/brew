@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-describe UnpackStrategy do
+RSpec.describe UnpackStrategy do
   describe "#extract_nestedly" do
     subject(:strategy) { described_class.detect(path) }
 
@@ -83,7 +83,7 @@ describe UnpackStrategy do
       end
 
       it "does not pass down the basename of the archive" do
-        strategy.extract_nestedly(to: unpack_dir, basename: basename)
+        strategy.extract_nestedly(to: unpack_dir, basename:)
         expect(unpack_dir/"file.txt").to be_a_file
       end
     end

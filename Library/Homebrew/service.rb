@@ -67,20 +67,20 @@ module Homebrew
 
     sig {
       params(
-        command: T.nilable(T.any(T::Array[String], String, Pathname)),
-        macos:   T.nilable(T.any(T::Array[String], String, Pathname)),
-        linux:   T.nilable(T.any(T::Array[String], String, Pathname)),
-      ).returns(T.nilable(Array))
+        command: T.nilable(T.any(T::Array[T.any(String, Pathname)], String, Pathname)),
+        macos:   T.nilable(T.any(T::Array[T.any(String, Pathname)], String, Pathname)),
+        linux:   T.nilable(T.any(T::Array[T.any(String, Pathname)], String, Pathname)),
+      ).returns(T.nilable(T::Array[T.any(String, Pathname)]))
     }
     def run(command = nil, macos: nil, linux: nil)
       # Save parameters for serialization
       if command
         @run_params = command
       elsif macos || linux
-        @run_params = { macos: macos, linux: linux }.compact
+        @run_params = { macos:, linux: }.compact
       end
 
-      command ||= on_system_conditional(macos: macos, linux: linux)
+      command ||= on_system_conditional(macos:, linux:)
       case command
       when nil
         @run
@@ -188,7 +188,7 @@ module Homebrew
       end
     end
 
-    SOCKET_STRING_REGEX = %r{^([a-z]+)://(.+):([0-9]+)$}i.freeze
+    SOCKET_STRING_REGEX = %r{^([a-z]+)://(.+):([0-9]+)$}i
 
     sig {
       params(value: T.nilable(T.any(String, T::Hash[Symbol, String])))
@@ -214,7 +214,7 @@ module Homebrew
           raise TypeError, "Service#sockets expects a valid ipv4 or ipv6 host address"
         end
 
-        { host: host, port: port, type: type }
+        { host:, port:, type: }
       end
     end
 
@@ -515,7 +515,7 @@ module Homebrew
 
     # Prepare the service hash for inclusion in the formula API JSON.
     sig { returns(Hash) }
-    def serialize
+    def to_hash
       name_params = {
         macos: (plist_name if plist_name != default_plist_name),
         linux: (service_name if service_name != default_service_name),
@@ -568,7 +568,7 @@ module Homebrew
 
     # Turn the service API hash values back into what is expected by the formula DSL.
     sig { params(api_hash: Hash).returns(Hash) }
-    def self.deserialize(api_hash)
+    def self.from_hash(api_hash)
       hash = {}
       hash[:name] = api_hash["name"].transform_keys(&:to_sym) if api_hash.key?("name")
 
@@ -581,11 +581,11 @@ module Homebrew
         when String
           replace_placeholders(api_hash["run"])
         when Array
-          api_hash["run"].map(&method(:replace_placeholders))
+          api_hash["run"].map { replace_placeholders(_1) }
         when Hash
           api_hash["run"].to_h do |key, elem|
             run_cmd = if elem.is_a?(Array)
-              elem.map(&method(:replace_placeholders))
+              elem.map { replace_placeholders(_1) }
             else
               replace_placeholders(elem)
             end

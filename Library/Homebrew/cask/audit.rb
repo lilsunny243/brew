@@ -1,6 +1,7 @@
 # typed: true
 # frozen_string_literal: true
 
+require "attrable"
 require "cask/denylist"
 require "cask/download"
 require "digest"
@@ -13,11 +14,10 @@ require "utils/shared_audits"
 
 module Cask
   # Audit a cask for various problems.
-  #
-  # @api private
   class Audit
+    include SystemCommand::Mixin
     include ::Utils::Curl
-    extend Predicable
+    extend Attrable
 
     attr_reader :cask, :download
 
@@ -39,7 +39,7 @@ module Cask
       download = online || signing if download.nil?
 
       @cask = cask
-      @download = Download.new(cask, quarantine: quarantine) if download
+      @download = Download.new(cask, quarantine:) if download
       @online = online
       @strict = strict
       @signing = signing
@@ -93,7 +93,7 @@ module Cask
       # Only raise non-critical audits if the user specified `--strict`.
       return if strict_only && !@strict
 
-      errors << ({ message: message, location: location, corrected: false })
+      errors << ({ message:, location:, corrected: false })
     end
 
     def result
@@ -405,17 +405,20 @@ module Cask
       add_error "cask token contains non-ascii characters" unless cask.token.ascii_only?
       add_error "cask token + should be replaced by -plus-" if cask.token.include? "+"
       add_error "cask token whitespace should be replaced by hyphens" if cask.token.include? " "
-      add_error "cask token @ should be replaced by -at-" if cask.token.include? "@"
       add_error "cask token underscores should be replaced by hyphens" if cask.token.include? "_"
       add_error "cask token should not contain double hyphens" if cask.token.include? "--"
 
-      if cask.token.match?(/[^a-z0-9-]/)
-        add_error "cask token should only contain lowercase alphanumeric characters and hyphens"
+      if cask.token.match?(/[^@a-z0-9-]/)
+        add_error "cask token should only contain lowercase alphanumeric characters, hyphens and @"
       end
 
-      return if !cask.token.start_with?("-") && !cask.token.end_with?("-")
+      if cask.token.start_with?("-", "@") || cask.token.end_with?("-", "@")
+        add_error "cask token should not have leading or trailing hyphens and/or @"
+      end
 
-      add_error "cask token should not have leading or trailing hyphens"
+      add_error "cask token @ unrelated to versioning should be replaced by -at-" if cask.token.count("@") > 1
+      add_error "cask token should not contain a hyphen followed by @" if cask.token.include? "-@"
+      add_error "cask token should not contain @ followed by a hyphen" if cask.token.include? "@-"
     end
 
     sig { void }
@@ -427,7 +430,7 @@ module Cask
       add_error "cask token contains .app" if token.end_with? ".app"
 
       match_data = /-(?<designation>alpha|beta|rc|release-candidate)$/.match(cask.token)
-      if match_data && cask.tap&.official? && cask.tap != "homebrew/cask-versions"
+      if match_data && cask.tap&.official?
         add_error "cask token contains version designation '#{match_data[:designation]}'"
       end
 
@@ -512,7 +515,7 @@ module Cask
 
       return if artifacts.empty?
 
-      @tmpdir ||= Pathname(Dir.mktmpdir)
+      @tmpdir ||= Pathname(Dir.mktmpdir("cask-audit", HOMEBREW_TEMP))
 
       ohai "Downloading and extracting artifacts"
 
@@ -653,22 +656,18 @@ module Cask
 
     sig { void }
     def audit_github_prerelease_version
-      return if cask.tap == "homebrew/cask-versions"
-
       odebug "Auditing GitHub prerelease"
       user, repo = get_repo_data(%r{https?://github\.com/([^/]+)/([^/]+)/?.*}) if online?
       return if user.nil?
 
       tag = SharedAudits.github_tag_from_url(cask.url)
       tag ||= cask.version
-      error = SharedAudits.github_release(user, repo, tag, cask: cask)
+      error = SharedAudits.github_release(user, repo, tag, cask:)
       add_error error, location: cask.url.location if error
     end
 
     sig { void }
     def audit_gitlab_prerelease_version
-      return if cask.tap == "homebrew/cask-versions"
-
       user, repo = get_repo_data(%r{https?://gitlab\.com/([^/]+)/([^/]+)/?.*}) if online?
       return if user.nil?
 
@@ -676,13 +675,13 @@ module Cask
 
       tag = SharedAudits.gitlab_tag_from_url(cask.url)
       tag ||= cask.version
-      error = SharedAudits.gitlab_release(user, repo, tag, cask: cask)
+      error = SharedAudits.gitlab_release(user, repo, tag, cask:)
       add_error error, location: cask.url.location if error
     end
 
     sig { void }
     def audit_github_repository_archived
-      # Deprecated/disabled casks may have an archived repo.
+      # Deprecated/disabled casks may have an archived repository.
       return if cask.discontinued? || cask.deprecated? || cask.disabled?
 
       user, repo = get_repo_data(%r{https?://github\.com/([^/]+)/([^/]+)/?.*}) if online?
@@ -696,7 +695,7 @@ module Cask
 
     sig { void }
     def audit_gitlab_repository_archived
-      # Deprecated/disabled casks may have an archived repo.
+      # Deprecated/disabled casks may have an archived repository.
       return if cask.discontinued? || cask.deprecated? || cask.disabled?
 
       user, repo = get_repo_data(%r{https?://gitlab\.com/([^/]+)/([^/]+)/?.*}) if online?
@@ -769,21 +768,9 @@ module Cask
     end
 
     sig { void }
-    def audit_https_availability
-      return unless download
-
-      if cask.url && !cask.url.using
-        validate_url_for_https_availability(cask.url, "binary URL", cask.token, cask.tap,
-                                            location: cask.url.location,
-                                            user_agents: [cask.url.user_agent], referer: cask.url&.referer)
-      end
-
-      if cask.livecheckable? && !cask.livecheck.url.is_a?(Symbol)
-        validate_url_for_https_availability(cask.livecheck.url, "livecheck URL", cask.token, cask.tap,
-                                            check_content: true)
-      end
-
-      return unless cask.homepage
+    def audit_homepage_https_availability
+      return unless online?
+      return unless (homepage = cask.homepage)
 
       user_agents = if cask.tap&.audit_exception(:simple_user_agent_for_homepage, cask.token)
         ["curl"]
@@ -791,10 +778,39 @@ module Cask
         [:browser, :default]
       end
 
-      validate_url_for_https_availability(cask.homepage, SharedAudits::URL_TYPE_HOMEPAGE, cask.token, cask.tap,
-                                          user_agents:   user_agents,
-                                          check_content: true,
-                                          strict:        strict?)
+      validate_url_for_https_availability(
+        homepage, SharedAudits::URL_TYPE_HOMEPAGE,
+        user_agents:,
+        check_content: true,
+        strict:        strict?
+      )
+    end
+
+    sig { void }
+    def audit_url_https_availability
+      return unless online?
+      return unless (url = cask.url)
+      return if url.using
+
+      validate_url_for_https_availability(
+        url, "binary URL",
+        location:    cask.url.location,
+        user_agents: [cask.url.user_agent],
+        referer:     cask.url&.referer
+      )
+    end
+
+    sig { void }
+    def audit_livecheck_https_availability
+      return unless online?
+      return unless cask.livecheckable?
+      return unless (url = cask.livecheck.url)
+      return if url.is_a?(Symbol)
+
+      validate_url_for_https_availability(
+        url, "livecheck URL",
+        check_content: true
+      )
     end
 
     sig { void }
@@ -808,19 +824,23 @@ module Cask
       add_error "Cask should be located in '#{expected_path}'"
     end
 
-    # sig {
-    #   params(url_to_check: T.any(String, URL), url_type: String, cask_token: String, tap: Tap,
-    #          options: T.untyped).void
-    # }
-    def validate_url_for_https_availability(url_to_check, url_type, cask_token, tap, location: nil, **options)
+    sig {
+      params(
+        url_to_check: T.any(String, URL),
+        url_type:     String,
+        location:     T.nilable(Homebrew::SourceLocation),
+        options:      T.untyped,
+      ).void
+    }
+    def validate_url_for_https_availability(url_to_check, url_type, location: nil, **options)
       problem = curl_check_http_content(url_to_check.to_s, url_type, **options)
-      exception = tap&.audit_exception(:secure_connection_audit_skiplist, cask_token, url_to_check.to_s)
+      exception = cask.tap&.audit_exception(:secure_connection_audit_skiplist, cask.token, url_to_check.to_s)
 
       if problem
         add_error problem, location: location unless exception
       elsif exception
         add_error "#{url_to_check} is in the secure connection audit skiplist but does not need to be skipped",
-                  location: location
+                  location:
       end
     end
 
@@ -843,7 +863,7 @@ module Cask
     def bad_url_format?(regex, valid_formats_array)
       return false unless cask.url.to_s.match?(regex)
 
-      valid_formats_array.none? { |format| cask.url.to_s =~ format }
+      valid_formats_array.none? { |format| cask.url.to_s.match?(format) }
     end
 
     sig { returns(T::Boolean) }
@@ -943,7 +963,7 @@ module Cask
       formula_path = Formulary.core_path(cask.token)
                               .to_s
                               .delete_prefix(core_tap.path.to_s)
-      "#{core_tap.default_remote}/blob/HEAD/Formula/#{formula_path}"
+      "#{core_tap.default_remote}/blob/HEAD#{formula_path}"
     end
   end
 end

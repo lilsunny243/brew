@@ -96,7 +96,7 @@ module Homebrew
 
         gnubin = %W[#{findutils.opt_libexec}/gnubin #{findutils.libexec}/gnubin]
         default_names = Tab.for_name("findutils").with? "default-names"
-        return if !default_names && (paths & gnubin).empty?
+        return if !default_names && !paths.intersect?(gnubin)
 
         <<~EOS
           Putting non-prefixed findutils in your path can cause python builds to fail.
@@ -138,7 +138,7 @@ module Homebrew
 
         # With fake El Capitan for Portable Ruby, we are intentionally not using Xcode 8.
         # This is because we are not using the CLT and Xcode 8 has the 10.12 SDK.
-        return if ENV["HOMEBREW_FAKE_EL_CAPITAN"]
+        return if ENV["HOMEBREW_FAKE_MACOS"]
 
         message = <<~EOS
           Your Xcode (#{MacOS::Xcode.version}) is outdated.
@@ -180,7 +180,7 @@ module Homebrew
         xcode += " => #{MacOS::Xcode.prefix}" unless MacOS::Xcode.default_prefix?
 
         <<~EOS
-          Your Xcode (#{xcode}) is too outdated.
+          Your Xcode (#{xcode}) at #{MacOS::Xcode.bundle_path} is too outdated.
           Please update to Xcode #{MacOS::Xcode.latest_version} (or delete it).
           #{MacOS::Xcode.update_instructions}
         EOS
@@ -340,7 +340,7 @@ module Homebrew
         else
           inject_file_list @found, <<~EOS
             libiconv files detected at a system prefix other than /usr.
-            Homebrew doesn't provide a libiconv formula, and expects to link against
+            Homebrew doesn't provide a libiconv formula and expects to link against
             the system version in /usr. libiconv in other prefixes can cause
             compile or link failure, especially if compiled with improper
             architectures. macOS itself never installs anything to /usr/local so

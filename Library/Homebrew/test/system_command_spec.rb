@@ -1,15 +1,17 @@
 # frozen_string_literal: true
 
-describe SystemCommand do
+require "system_command"
+
+RSpec.describe SystemCommand do
   describe "#initialize" do
     subject(:command) do
       described_class.new(
         "env",
         args:         env_args,
-        env:          env,
+        env:,
         must_succeed: true,
-        sudo:         sudo,
-        sudo_as_root: sudo_as_root,
+        sudo:,
+        sudo_as_root:,
       )
     end
 
@@ -19,7 +21,7 @@ describe SystemCommand do
     let(:sudo_as_root) { false }
 
     context "when given some environment variables" do
-      its("run!.stdout") { is_expected.to eq("123") }
+      it("run!.stdout") { expect(command.run!.stdout).to eq("123") }
 
       describe "the resulting command line" do
         it "includes the given variables explicitly" do
@@ -92,10 +94,10 @@ describe SystemCommand do
 
   context "when the exit code is 0" do
     describe "its result" do
-      subject { described_class.run("true") }
+      subject(:result) { described_class.run("true") }
 
       it { is_expected.to be_a_success }
-      its(:exit_status) { is_expected.to eq(0) }
+      it(:exit_status) { expect(result.exit_status).to eq(0) }
     end
   end
 
@@ -112,10 +114,10 @@ describe SystemCommand do
 
     context "with a command that does not have to succeed" do
       describe "its result" do
-        subject { described_class.run(command) }
+        subject(:result) { described_class.run(command) }
 
         it { is_expected.not_to be_a_success }
-        its(:exit_status) { is_expected.to eq(1) }
+        it(:exit_status) { expect(result.exit_status).to eq(1) }
       end
     end
   end
@@ -129,10 +131,10 @@ describe SystemCommand do
     end
 
     describe "its result" do
-      subject { described_class.run(command, args: [path]) }
+      subject(:result) { described_class.run(command, args: [path]) }
 
       it { is_expected.to be_a_success }
-      its(:stdout) { is_expected.to eq("somefile\n") }
+      it(:stdout) { expect(result.stdout).to eq("somefile\n") }
     end
   end
 
@@ -147,11 +149,11 @@ describe SystemCommand do
 
     shared_examples "it returns '1 2 3 4 5 6'" do
       describe "its result" do
-        subject { described_class.run(command, **options) }
+        subject(:result) { described_class.run(command, **options) }
 
         it { is_expected.to be_a_success }
-        its(:stdout) { is_expected.to eq([1, 3, 5, nil].join("\n")) }
-        its(:stderr) { is_expected.to eq([2, 4, 6, nil].join("\n")) }
+        it(:stdout) { expect(result.stdout).to eq([1, 3, 5, nil].join("\n")) }
+        it(:stderr) { expect(result.stderr).to eq([2, 4, 6, nil].join("\n")) }
       end
     end
 
@@ -192,6 +194,8 @@ describe SystemCommand do
       end
 
       context "when `debug?` is true" do
+        include Context
+
         let(:options) do
           { args: [
             "-c",
@@ -284,7 +288,7 @@ describe SystemCommand do
 
     it 'does not format `stderr` when it starts with \r' do
       expect do
-        system_command \
+        Class.new.extend(SystemCommand::Mixin).system_command \
           "bash",
           args: [
             "-c",
@@ -308,7 +312,7 @@ describe SystemCommand do
       end
 
       it "does not interpret the executable as a shell line" do
-        expect(system_command(executable)).to be_a_success
+        expect(Class.new.extend(SystemCommand::Mixin).system_command(executable)).to be_a_success
       end
     end
 

@@ -5,8 +5,6 @@ require "system_command"
 
 module Utils
   # Helper functions for querying SVN information.
-  #
-  # @api private
   module Svn
     class << self
       include SystemCommand::Mixin
@@ -29,7 +27,7 @@ module Utils
         return true unless available?
 
         args = ["ls", url, "--depth", "empty"]
-        _, stderr, status = system_command("svn", args: args, print_stderr: false)
+        _, stderr, status = system_command("svn", args:, print_stderr: false)
         return status.success? unless stderr.include?("certificate verification failed")
 
         # OK to unconditionally trust here because we're just checking if a URL exists.

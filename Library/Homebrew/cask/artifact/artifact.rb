@@ -6,8 +6,6 @@ require "cask/artifact/moved"
 module Cask
   module Artifact
     # Generic artifact corresponding to the `artifact` stanza.
-    #
-    # @api private
     class Artifact < Moved
       sig { returns(String) }
       def self.english_name
@@ -30,11 +28,6 @@ module Cask
       sig { params(target: T.any(String, Pathname)).returns(Pathname) }
       def resolve_target(target)
         super(target, base_dir: nil)
-      end
-
-      sig { params(cask: Cask, source: T.any(String, Pathname), target: T.any(String, Pathname)).void }
-      def initialize(cask, source, target:)
-        super(cask, source, target: target)
       end
     end
   end

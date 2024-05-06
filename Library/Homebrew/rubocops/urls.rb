@@ -7,8 +7,6 @@ module RuboCop
   module Cop
     module FormulaAudit
       # This cop audits `url`s and `mirror`s in formulae.
-      #
-      # @api private
       class Urls < FormulaCop
         def audit_formula(_node, _class_node, _parent_class_node, body_node)
           return if body_node.nil?
@@ -129,7 +127,7 @@ module RuboCop
           # SourceForge url patterns
           sourceforge_patterns = %r{^https?://.*\b(sourceforge|sf)\.(com|net)}
           audit_urls(urls, sourceforge_patterns) do |_, url|
-            # Skip if the URL looks like a SVN repo
+            # Skip if the URL looks like a SVN repository.
             next if url.include? "/svnroot/"
             next if url.include? "svn.sourceforge"
             next if url.include? "/p/"
@@ -185,19 +183,19 @@ module RuboCop
             problem "Please use https:// for #{url}"
           end
 
-          # Check for git:// GitHub repo URLs, https:// is preferred.
+          # Check for `git://` GitHub repository URLs, https:// is preferred.
           git_gh_pattern = %r{^git://[^/]*github\.com/}
           audit_urls(urls, git_gh_pattern) do |_, url|
             problem "Please use https:// for #{url}"
           end
 
-          # Check for git:// Gitorious repo URLs, https:// is preferred.
+          # Check for `git://` Gitorious repository URLs, https:// is preferred.
           git_gitorious_pattern = %r{^git://[^/]*gitorious\.org/}
           audit_urls(urls, git_gitorious_pattern) do |_, url|
             problem "Please use https:// for #{url}"
           end
 
-          # Check for http:// GitHub repo URLs, https:// is preferred.
+          # Check for `http://` GitHub repository URLs, https:// is preferred.
           gh_pattern = %r{^http://github\.com/.*\.git$}
           audit_urls(urls, gh_pattern) do |_, url|
             problem "Please use https:// for #{url}"
@@ -209,7 +207,7 @@ module RuboCop
             problem "Use versioned rather than branch tarballs for stable checksums."
           end
 
-          # Use new-style archive downloads
+          # Use new-style archive downloads.
           archive_gh_pattern = %r{https://.*github.*/(?:tar|zip)ball/}
           audit_urls(urls, archive_gh_pattern) do |_, url|
             next if url.end_with?(".git")
@@ -265,8 +263,6 @@ module RuboCop
       end
 
       # This cop makes sure that the correct format for PyPI URLs is used.
-      #
-      # @api private
       class PyPiUrls < FormulaCop
         def audit_formula(_node, _class_node, _parent_class_node, body_node)
           return if body_node.nil?
@@ -297,8 +293,6 @@ module RuboCop
       end
 
       # This cop makes sure that git URLs have a `revision`.
-      #
-      # @api private
       class GitUrls < FormulaCop
         def audit_formula(_node, _class_node, _parent_class_node, body_node)
           return if body_node.nil?
@@ -321,8 +315,6 @@ module RuboCop
 
     module FormulaAuditStrict
       # This cop makes sure that git URLs have a `tag`.
-      #
-      # @api private
       class GitUrls < FormulaCop
         def audit_formula(_node, _class_node, _parent_class_node, body_node)
           return if body_node.nil?

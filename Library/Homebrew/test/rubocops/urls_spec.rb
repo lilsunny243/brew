@@ -2,7 +2,7 @@
 
 require "rubocops/urls"
 
-describe RuboCop::Cop::FormulaAudit::Urls do
+RSpec.describe RuboCop::Cop::FormulaAudit::Urls do
   subject(:cop) { described_class.new }
 
   let(:offense_list) do
@@ -197,7 +197,7 @@ describe RuboCop::Cop::FormulaAudit::Urls do
                                severity: :convention,
                                line:     3,
                                column:   offense_info["col"],
-                               source:   source }]
+                               source: }]
 
         offenses = inspect_source(source)
 

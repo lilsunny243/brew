@@ -2,8 +2,6 @@
 # frozen_string_literal: true
 
 # Helper module for handling `disable!` and `deprecate!`.
-#
-# @api private
 module DeprecateDisable
   module_function
 
@@ -23,7 +21,12 @@ module DeprecateDisable
   }.freeze
 
   CASK_DEPRECATE_DISABLE_REASONS = {
-    discontinued: "is discontinued upstream",
+    discontinued:             "is discontinued upstream",
+    moved_to_mas:             "is now exclusively distributed on the Mac App Store",
+    no_longer_available:      "is no longer available upstream",
+    no_longer_meets_criteria: "no longer meets the criteria for acceptable casks",
+    unmaintained:             "is not maintained upstream",
+    unsigned:                 "is unsigned or does not meet signature requirements",
   }.freeze
 
   def type(formula_or_cask)

@@ -6,8 +6,6 @@ require "erb"
 
 module Homebrew
   # Class for generating a formula from a template.
-  #
-  # @api private
   class FormulaCreator
     attr_accessor :name
 
@@ -31,6 +29,7 @@ module Homebrew
       raise TapUnavailableError, @tap.name unless @tap.installed?
     end
 
+    sig { params(url: String).returns(T.nilable(String)) }
     def self.name_from_url(url)
       stem = Pathname.new(url).stem
       # special cases first
@@ -47,6 +46,7 @@ module Homebrew
       end
     end
 
+    sig { void }
     def parse_url
       @name = FormulaCreator.name_from_url(@url) if @name.blank?
       odebug "name_from_url: #{@name}"
@@ -54,15 +54,18 @@ module Homebrew
 
       case @url
       when %r{github\.com/(\S+)/(\S+)\.git}
-        @user = Regexp.last_match(1)
         @head = true
-        @github = true
+        user = Regexp.last_match(1)
+        repo = Regexp.last_match(2)
+        @github = GitHub.repository(user, repo) if @fetch
       when %r{github\.com/(\S+)/(\S+)/(archive|releases)/}
-        @user = Regexp.last_match(1)
-        @github = true
+        user = Regexp.last_match(1)
+        repo = Regexp.last_match(2)
+        @github = GitHub.repository(user, repo) if @fetch
       end
     end
 
+    sig { returns(Pathname) }
     def write_formula!
       raise ArgumentError, "name is blank!" if @name.blank?
       raise ArgumentError, "tap is blank!" if @tap.blank?
@@ -72,26 +75,20 @@ module Homebrew
 
       if @version.nil? || @version.null?
         odie "Version cannot be determined from URL. Explicitly set the version with `--set-version` instead."
-      elsif @fetch
+      end
+
+      if @fetch
         unless @head
           r = Resource.new
           r.url(@url)
-          r.version(@version)
           r.owner = self
           @sha256 = r.fetch.sha256 if r.download_strategy == CurlDownloadStrategy
         end
 
-        if @user && @name
-          begin
-            metadata = GitHub.repository(@user, @name)
-            @desc = metadata["description"]
-            @homepage = metadata["homepage"]
-            @license = metadata["license"]["spdx_id"] if metadata["license"]
-          rescue GitHub::API::HTTPNotFoundError
-            # If there was no repository found assume the network connection is at
-            # fault rather than the input URL.
-            nil
-          end
+        if @github
+          @desc = @github["description"]
+          @homepage = @github["homepage"]
+          @license = @github["license"]["spdx_id"] if @github["license"]
         end
       end
 
@@ -102,6 +99,8 @@ module Homebrew
 
     sig { returns(String) }
     def template
+      # FIXME: https://github.com/errata-ai/vale/issues/818
+      # <!-- vale off -->
       <<~ERB
         # Documentation: https://docs.brew.sh/Formula-Cookbook
         #                https://rubydoc.brew.sh/Formula
@@ -161,15 +160,14 @@ module Homebrew
 
         <% end %>
           def install
-            # ENV.deparallelize  # if your formula fails when building in parallel
         <% if @mode == :cmake %>
             system "cmake", "-S", ".", "-B", "build", *std_cmake_args
             system "cmake", "--build", "build"
             system "cmake", "--install", "build"
         <% elsif @mode == :autotools %>
-            # Remove unrecognized options if warned by configure
+            # Remove unrecognized options if they cause configure to fail
             # https://rubydoc.brew.sh/Formula.html#std_configure_args-instance_method
-            system "./configure", *std_configure_args, "--disable-silent-rules"
+            system "./configure", "--disable-silent-rules", *std_configure_args
             system "make", "install" # if this fails, try separate make/make install steps
         <% elsif @mode == :crystal %>
             system "shards", "build", "--release"
@@ -187,14 +185,14 @@ module Homebrew
             ENV.prepend_create_path "PERL5LIB", libexec/"lib/perl5"
             ENV.prepend_path "PERL5LIB", libexec/"lib"
 
-            # Stage additional dependency (Makefile.PL style)
+            # Stage additional dependency (`Makefile.PL` style).
             # resource("").stage do
             #   system "perl", "Makefile.PL", "INSTALL_BASE=\#{libexec}"
             #   system "make"
             #   system "make", "install"
             # end
 
-            # Stage additional dependency (Build.PL style)
+            # Stage additional dependency (`Build.PL` style).
             # resource("").stage do
             #   system "perl", "Build.PL", "--install_base", libexec
             #   system "./Build"
@@ -214,9 +212,9 @@ module Homebrew
         <% elsif @mode == :rust %>
             system "cargo", "install", *std_cargo_args
         <% else %>
-            # Remove unrecognized options if warned by configure
+            # Remove unrecognized options if they cause configure to fail
             # https://rubydoc.brew.sh/Formula.html#std_configure_args-instance_method
-            system "./configure", *std_configure_args, "--disable-silent-rules"
+            system "./configure", "--disable-silent-rules", *std_configure_args
             # system "cmake", "-S", ".", "-B", "build", *std_cmake_args
         <% end %>
           end
@@ -235,6 +233,7 @@ module Homebrew
           end
         end
       ERB
+      # <!-- vale on -->
     end
   end
 end

@@ -2,7 +2,7 @@
 
 require "missing_formula"
 
-describe Homebrew::MissingFormula do
+RSpec.describe Homebrew::MissingFormula do
   describe "::reason" do
     subject { described_class.reason("gem") }
 
@@ -99,7 +99,7 @@ describe Homebrew::MissingFormula do
   end
 
   describe "::cask_reason", :cask do
-    subject { described_class.cask_reason(formula, show_info: show_info) }
+    subject { described_class.cask_reason(formula, show_info:) }
 
     context "with a formula name that is a cask and show_info: false" do
       let(:formula) { "local-caffeine" }

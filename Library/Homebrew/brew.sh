@@ -82,7 +82,34 @@ HOMEBREW_TEMP="${HOMEBREW_TEMP:-${HOMEBREW_DEFAULT_TEMP}}"
 # Don't need to handle a default case.
 # HOMEBREW_LIBRARY set by bin/brew
 # shellcheck disable=SC2249,SC2154
-case "$*" in
+#
+# commands that take a single or no arguments.
+case "$1" in
+  formulae)
+    source "${HOMEBREW_LIBRARY}/Homebrew/cmd/formulae.sh"
+    homebrew-formulae
+    exit 0
+    ;;
+  casks)
+    source "${HOMEBREW_LIBRARY}/Homebrew/cmd/casks.sh"
+    homebrew-casks
+    exit 0
+    ;;
+  shellenv)
+    source "${HOMEBREW_LIBRARY}/Homebrew/cmd/shellenv.sh"
+    shift
+    homebrew-shellenv "$1"
+    exit 0
+    ;;
+  setup-ruby)
+    source "${HOMEBREW_LIBRARY}/Homebrew/cmd/setup-ruby.sh"
+    shift
+    homebrew-setup-ruby "$1"
+    exit 0
+    ;;
+esac
+# functions that take multiple arguments or handle multiple commands.
+case "$@" in
   --cellar)
     echo "${HOMEBREW_CELLAR}"
     exit 0
@@ -99,26 +126,15 @@ case "$*" in
     echo "${HOMEBREW_CACHE}"
     exit 0
     ;;
-  shellenv)
-    source "${HOMEBREW_LIBRARY}/Homebrew/cmd/shellenv.sh"
-    shift
-    homebrew-shellenv "$1"
-    exit 0
-    ;;
-  formulae)
-    source "${HOMEBREW_LIBRARY}/Homebrew/cmd/formulae.sh"
-    homebrew-formulae
-    exit 0
-    ;;
-  casks)
-    source "${HOMEBREW_LIBRARY}/Homebrew/cmd/casks.sh"
-    homebrew-casks
-    exit 0
-    ;;
   # falls back to cmd/--prefix.rb and cmd/--cellar.rb on a non-zero return
   --prefix* | --cellar*)
     source "${HOMEBREW_LIBRARY}/Homebrew/formula_path.sh"
     homebrew-formula-path "$@" && exit 0
+    ;;
+  # falls back to cmd/command.rb on a non-zero return
+  command*)
+    source "${HOMEBREW_LIBRARY}/Homebrew/command_path.sh"
+    homebrew-command-path "$@" && exit 0
     ;;
 esac
 
@@ -216,7 +232,7 @@ numeric() {
 }
 
 check-run-command-as-root() {
-  [[ "$(id -u)" == 0 ]] || return
+  [[ "$(id -u)" == 0 || "$(id -ur)" == 0 ]] || return
 
   # Allow Azure Pipelines/GitHub Actions/Docker/Concourse/Kubernetes to do everything as root (as it's normal there)
   [[ -f /.dockerenv ]] && return
@@ -249,7 +265,7 @@ EOS
   fi
 }
 
-# NOTE: the members of the array in the second arg must not have spaces!
+# NOTE: The members of the array in the second arg must not have spaces!
 check-array-membership() {
   local item=$1
   shift
@@ -259,22 +275,6 @@ check-array-membership() {
     return 0
   else
     return 1
-  fi
-}
-
-# Let user know we're still updating Homebrew if brew update --auto-update
-# exceeds 3 seconds.
-auto-update-timer() {
-  sleep 3
-  # Outputting a command but don't want to run it, hence single quotes.
-  # shellcheck disable=SC2016
-  echo 'Running `brew update --auto-update`...' >&2
-  if [[ -z "${HOMEBREW_NO_ENV_HINTS}" && -z "${HOMEBREW_AUTO_UPDATE_SECS}" ]]
-  then
-    # shellcheck disable=SC2016
-    echo 'Adjust how often this is run with HOMEBREW_AUTO_UPDATE_SECS or disable with' >&2
-    # shellcheck disable=SC2016
-    echo 'HOMEBREW_NO_AUTO_UPDATE. Hide these hints with HOMEBREW_NO_ENV_HINTS (see `man brew`).' >&2
   fi
 }
 
@@ -294,9 +294,30 @@ auto-update() {
   then
     export HOMEBREW_AUTO_UPDATING="1"
 
+    # Look for commands that may be referring to a formula/cask in a specific
+    # 3rd-party tap so they can be auto-updated more often (as they do not get
+    # their data from the API).
+    AUTO_UPDATE_TAP_COMMANDS=(
+      install
+      outdated
+      upgrade
+    )
+    if check-array-membership "${HOMEBREW_COMMAND}" "${AUTO_UPDATE_TAP_COMMANDS[@]}"
+    then
+      for arg in "$@"
+      do
+        if [[ "${arg}" == */*/* ]] && [[ "${arg}" != Homebrew/* ]] && [[ "${arg}" != homebrew/* ]]
+        then
+
+          HOMEBREW_AUTO_UPDATE_TAP="1"
+          break
+        fi
+      done
+    fi
+
     if [[ -z "${HOMEBREW_AUTO_UPDATE_SECS}" ]]
     then
-      if [[ -n "${HOMEBREW_NO_INSTALL_FROM_API}" ]]
+      if [[ -n "${HOMEBREW_NO_INSTALL_FROM_API}" || -n "${HOMEBREW_AUTO_UPDATE_TAP}" ]]
       then
         # 5 minutes
         HOMEBREW_AUTO_UPDATE_SECS="300"
@@ -339,21 +360,10 @@ auto-update() {
       return
     fi
 
-    if [[ -z "${HOMEBREW_VERBOSE}" ]]
-    then
-      auto-update-timer &
-      timer_pid=$!
-    fi
-
     brew update --auto-update
 
-    if [[ -n "${timer_pid}" ]]
-    then
-      kill "${timer_pid}" 2>/dev/null
-      wait "${timer_pid}" 2>/dev/null
-    fi
-
     unset HOMEBREW_AUTO_UPDATING
+    unset HOMEBREW_AUTO_UPDATE_TAP
 
     # Restore user path as it'll be refiltered by HOMEBREW_BREW_FILE (bin/brew)
     export PATH=${HOMEBREW_PATH}
@@ -419,9 +429,13 @@ fi
 
 # Many Pathname operations use getwd when they shouldn't, and then throw
 # odd exceptions. Reduce our support burden by showing a user-friendly error.
-if [[ ! -d "$(pwd)" ]]
+if ! [[ -d "$(pwd)" ]]
 then
-  odie "The current working directory doesn't exist, cannot proceed."
+  odie "The current working directory must exist to run brew."
+fi
+if ! [[ -r "$(pwd)" ]]
+then
+  odie "The current working directory must be readable to ${USER} to run brew."
 fi
 
 #####
@@ -494,7 +508,8 @@ HOMEBREW_CORE_REPOSITORY="${HOMEBREW_LIBRARY}/Taps/homebrew/homebrew-core"
 # shellcheck disable=SC2034
 HOMEBREW_CASK_REPOSITORY="${HOMEBREW_LIBRARY}/Taps/homebrew/homebrew-cask"
 
-case "$*" in
+# commands that take a single or no arguments.
+case "$1" in
   --version | -v)
     source "${HOMEBREW_LIBRARY}/Homebrew/cmd/--version.sh"
     homebrew-version
@@ -571,7 +586,14 @@ then
     HOMEBREW_FORCE_BREWED_CA_CERTIFICATES="1"
   fi
 
+  # TEMP: backwards compatiblity with existing 10.11-cross image
+  # Can (probably) be removed in March 2024.
   if [[ -n "${HOMEBREW_FAKE_EL_CAPITAN}" ]]
+  then
+    export HOMEBREW_FAKE_MACOS="10.11.6"
+  fi
+
+  if [[ "${HOMEBREW_FAKE_MACOS}" =~ ^10\.11(\.|$) ]]
   then
     # We only need this to work enough to update brew and build the set portable formulae, so relax the requirement.
     HOMEBREW_MINIMUM_GIT_VERSION="2.7.4"
@@ -855,7 +877,8 @@ if check-array-membership "${HOMEBREW_COMMAND}" "${AUTO_UPDATE_CORE_TAP_COMMANDS
 then
   export HOMEBREW_AUTO_UPDATE_COMMAND="1"
   export HOMEBREW_AUTO_UPDATE_CORE_TAP="1"
-else
+elif [[ -z "${HOMEBREW_AUTO_UPDATING}" ]]
+then
   unset HOMEBREW_AUTO_UPDATE_CORE_TAP
 fi
 
@@ -869,12 +892,10 @@ if check-array-membership "${HOMEBREW_COMMAND}" "${AUTO_UPDATE_CASK_TAP_COMMANDS
 then
   export HOMEBREW_AUTO_UPDATE_COMMAND="1"
   export HOMEBREW_AUTO_UPDATE_CASK_TAP="1"
-else
-  unset HOMEBREW_AUTO_UPDATE_CORE_TAP
+elif [[ -z "${HOMEBREW_AUTO_UPDATING}" ]]
+then
+  unset HOMEBREW_AUTO_UPDATE_CASK_TAP
 fi
-
-# Disable Ruby options we don't need.
-export HOMEBREW_RUBY_DISABLE_OPTIONS="--disable=gems,rubyopt"
 
 if [[ -z "${HOMEBREW_RUBY_WARNINGS}" ]]
 then

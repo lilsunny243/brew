@@ -29,13 +29,7 @@ Exception: `do` blocks such as `postflight` may enclose a block of pure Ruby cod
 
 ## Header line details
 
-The first non-comment line in a cask follows the form:
-
-```ruby
-cask "<cask-token>" do
-```
-
-[`<cask-token>`](#token-reference) should match the cask filename, without the `.rb` extension, enclosed in double quotes.
+The Cask name ([`<cask-token>`](#token-reference)) on the header line `cask <cask-token> do` should match the cask filename, without the `.rb` extension, enclosed in double quotes.
 
 There are currently some arbitrary limitations on cask tokens which are in the process of being removed. GitHub Actions will catch any errors during the transition.
 
@@ -139,7 +133,7 @@ Each cask must declare one or more *artifacts* (i.e. something to install).
 | `internet_plugin`                | yes                           | Relative path to an Internet Plugin that should be moved into the `~/Library/Internet Plug-Ins` folder on installation. |
 | `keyboard_layout`                | yes                           | Relative path to a Keyboard Layout that should be moved into the `/Library/Keyboard Layouts` folder on installation. |
 | `prefpane`                       | yes                           | Relative path to a Preference Pane that should be moved into the `~/Library/PreferencePanes` folder on installation. |
-| `qlplugin`                       | yes                           | Relative path to a QuickLook Plugin that should be moved into the `~/Library/QuickLook` folder on installation. |
+| `qlplugin`                       | yes                           | Relative path to a Quick Look Plugin that should be moved into the `~/Library/QuickLook` folder on installation. |
 | `mdimporter`                     | yes                           | Relative path to a Spotlight Metadata Importer that should be moved into the `~/Library/Spotlight` folder on installation. |
 | `screen_saver`                   | yes                           | Relative path to a Screen Saver that should be moved into the `~/Library/Screen Savers` folder on installation. |
 | `service`                        | yes                           | Relative path to a Service that should be moved into the `~/Library/Services` folder on installation. |
@@ -446,7 +440,7 @@ depends_on arch: :arm64
 
 `desc` accepts a single-line UTF-8 string containing a short description of the software. It’s used to help with searchability and disambiguation, thus it must concisely describe what the software does (or what you can accomplish with it).
 
-`desc` is not for app slogans! Vendors’ descriptions tend to be filled with generic adjectives such as “modern” and “lightweight”. Those are meaningless marketing fluff (do you ever see apps proudly describing themselves as outdated and bulky?) which must the deleted. It’s fine to use the information on the software’s website as a starting point, but it will require editing in almost all cases.
+`desc` is not for app slogans! Vendors’ descriptions tend to be filled with generic adjectives such as “modern” and “lightweight”. Those are meaningless marketing fluff (do you ever see apps proudly describing themselves as outdated and bulky?) which must be deleted. It’s fine to use the information on the software’s website as a starting point, but it will require editing in almost all cases.
 
 #### Dos and Don'ts
 
@@ -622,7 +616,7 @@ brew install firefox --language=it
 
 ### Stanza: `livecheck`
 
-The `livecheck` stanza is used to automatically fetch the latest version of a cask from changelogs, release notes, appcasts, etc. Since the main [homebrew/cask](https://github.com/Homebrew/homebrew-cask) repository only accepts submissions for stable versions of software (and [documented exceptions](https://docs.brew.sh/Acceptable-Casks#but-there-is-no-stable-version)), this allows for verifying that the submitted version is the latest, and alerting when a newer version is available using [`brew livecheck`](Brew-Livecheck.md).
+The `livecheck` stanza is used to automatically fetch the latest version of a cask from changelogs, release notes, appcasts, etc.
 
 Every `livecheck` block must contain a `url`, which can be either a string or a symbol pointing to other URLs in the cask (`:url` or `:homepage`).
 
@@ -761,8 +755,8 @@ Since `pkg` installers can do arbitrary things, different techniques are needed 
 
 * **`early_script:`** (string or hash) - like [`script:`](#uninstall-script), but runs early (for special cases, best avoided)
 * [`launchctl:`](#uninstall-launchctl) (string or array) - IDs of `launchd` jobs to remove
-* [`quit:`](#uninstall-quit) (string or array) - bundle IDs of running applications to quit
-* [`signal:`](#uninstall-signal) (array of arrays) - signal numbers and bundle IDs of running applications to send a Unix signal to (for when `quit:` does not work)
+* [`quit:`](#uninstall-quit) (string or array) - bundle IDs of running applications to quit (does not run when uninstall is initiated by `brew upgrade` or `brew reinstall`)
+* [`signal:`](#uninstall-signal) (array of arrays) - signal numbers and bundle IDs of running applications to send a Unix signal to - for when `quit:` does not work (does not run when uninstall is initiated by `brew upgrade` or `brew reinstall`)
 * [`login_item:`](#uninstall-login_item) (string or array) - names of login items to remove
 * [`kext:`](#uninstall-kext) (string or array) - bundle IDs of kexts to unload from the system
 * [`script:`](#uninstall-script) (string or hash) - relative path to an uninstall script to be run via sudo; use hash if args are needed
@@ -852,12 +846,12 @@ An example, with commonly used signals in ascending order of severity:
 
 ```ruby
 uninstall signal: [
-            ["TERM", "fr.madrau.switchresx.daemon"],
-            ["QUIT", "fr.madrau.switchresx.daemon"],
-            ["INT",  "fr.madrau.switchresx.daemon"],
-            ["HUP",  "fr.madrau.switchresx.daemon"],
-            ["KILL", "fr.madrau.switchresx.daemon"],
-          ]
+  ["TERM", "fr.madrau.switchresx.daemon"],
+  ["QUIT", "fr.madrau.switchresx.daemon"],
+  ["INT",  "fr.madrau.switchresx.daemon"],
+  ["HUP",  "fr.madrau.switchresx.daemon"],
+  ["KILL", "fr.madrau.switchresx.daemon"],
+]
 ```
 
 Note that when multiple running processes match the given bundle ID, all matching processes will be signaled.
@@ -1059,7 +1053,7 @@ The block will be called immediately before downloading; its result value will b
 
 You can use the `url` stanza with either a direct argument or a block but not with both.
 
-Example of using the block syntax: [vlc-nightly.rb](https://github.com/Homebrew/homebrew-cask-versions/blob/d3b9d0fdcf83f1f87c3ad64a852323a6e687c5f7/Casks/vlc-nightly.rb#L7-L12)
+Example of using the block syntax: [vlc@nightly.rb](https://github.com/Homebrew/homebrew-cask/blob/0b2b76ad8c3fbf4e1ee2f5e758640c4963ad6aaf/Casks/v/vlc%40nightly.rb#L7-L12)
 
 ##### Mixing additional URL parameters with the block syntax
 
@@ -1082,7 +1076,7 @@ we can use:
 
 ```ruby
 version "1.2.3"
-url "https://example.com/file-version-#{version.delete('.')}.dmg"
+url "https://example.com/file-version-#{version.delete(".")}.dmg"
 ```
 
 We can also leverage the power of regular expressions. So instead of:
@@ -1096,7 +1090,7 @@ we can use:
 
 ```ruby
 version "1.2.3build4"
-url "https://example.com/#{version.sub(%r{build\d+}, '')}/file-version-#{version}.dmg"
+url "https://example.com/#{version.sub(/build\d+/, "")}/file-version-#{version}.dmg"
 ```
 
 #### `version` methods
@@ -1197,6 +1191,7 @@ cask "libreoffice" do
 
   url "https://download.documentfoundation.org/libreoffice/stable/#{version}/mac/#{folder}/LibreOffice_#{version}_MacOS_#{arch}.dmg",
       verified: "download.documentfoundation.org/libreoffice/stable/"
+end
 ```
 
 If the version number is different for each architecture, locate the unique `version` and (if checked) `sha256` stanzas within `on_arm` and `on_intel` blocks. Example (from [inkscape.rb](https://github.com/Homebrew/homebrew-cask/blob/11f6966bf17628b98895d64a61a4fb0bc1bb31bf/Casks/i/inkscape.rb#L1-L13)):
@@ -1215,6 +1210,7 @@ cask "inkscape" do
   end
 
   url "https://inkscape.org/gallery/item/#{version.csv.second}/Inkscape-#{version.csv.first}_#{arch}.dmg"
+end
 ```
 
 To adjust the installed version depending on the current macOS release, use a series of `on_<system>` blocks that cover the range of supported releases. Each block can contain stanzas that set which version to download and customize installation/uninstallation and livecheck behaviour for one or more releases. Example (from [calibre.rb](https://github.com/Homebrew/homebrew-cask/blob/482c34e950da8d649705f4aaea7b760dcb4b5402/Casks/c/calibre.rb#L1-L34)):
@@ -1244,6 +1240,7 @@ cask "calibre" do
       strategy :github_latest
     end
   end
+end
 ```
 
 Such `on_<system>` blocks can be nested and contain other stanzas not listed here. Examples: [calhash.rb](https://github.com/Homebrew/homebrew-cask/blob/HEAD/Casks/c/calhash.rb), [openzfs.rb](https://github.com/Homebrew/homebrew-cask/blob/HEAD/Casks/o/openzfs.rb), [r.rb](https://github.com/Homebrew/homebrew-cask/blob/HEAD/Casks/r/r.rb), [wireshark.rb](https://github.com/Homebrew/homebrew-cask/blob/HEAD/Casks/w/wireshark.rb)
@@ -1260,17 +1257,17 @@ In the exceptional case that the cask DSL is insufficient, it is possible to def
 cask "myapp" do
   module Utils
     def self.arbitrary_method
-      ...
+      # ...
     end
   end
 
-  name "MyApp"
   version "1.0"
   sha256 "a32565cdb1673f4071593d4cc9e1c26bc884218b62fef8abc450daa47ba8fa92"
 
   url "https://#{Utils.arbitrary_method}"
+  name "MyApp"
   homepage "https://www.example.com/"
-  ...
+  # ...
 end
 ```
 
@@ -1356,7 +1353,7 @@ Details of software names and brands will inevitably be lost in the conversion t
 
 #### Simplified names of non-App software
 
-* Currently, rules for generating a token are not well-defined for Preference Panes, QuickLook plugins, and several other types of software installable by Homebrew Cask. Just create the best name you can, based on the filename on disk or the vendor’s web page. Watch out for duplicates.
+* Currently, rules for generating a token are not well-defined for Preference Panes, Quick Look plugins, and several other types of software installable by Homebrew Cask. Just create the best name you can, based on the filename on disk or the vendor’s web page. Watch out for duplicates.
 
   Non-app tokens should become more standardized in the future.
 
@@ -1378,6 +1375,14 @@ To convert the App’s Simplified Name (above) to a token:
 * Collapse a series of multiple hyphens into one hyphen.
 * Delete a leading or trailing hyphen.
 
+### Casks pinned to specific versions
+
+Casks pinned to a specific version of the application (i.e. [`carbon-copy-cloner@5`](https://github.com/Homebrew/homebrew-cask/blob/1b8f44198e5e184c597ee07454a1e10f97f36b15/Casks/c/carbon-copy-cloner%405.rb)) should use the same token as the standard cask with a suffix of `@<version-number`. For Carbon Copy Cloner (`carbon-copy-cloner`), pinned to version 5, the token should be `carbon-copy-cloner@5`.
+
+### Casks pinned to development channels
+
+Casks that use an development "channel", such as betas, should use the same token as the standard cask with a suffix of `@<channel>`. For Google Chrome (`google-chrome`), using the "beta" channel, the token should be `google-chrome@beta`.
+
 ### Cask filenames
 
 Casks are stored in a Ruby file named after the token, with the file extension `.rb`.
@@ -1398,11 +1403,18 @@ These illustrate most of the rules for generating a token:
 | `LPK25 Editor.app`     | LPK25 Editor        | lpk25-editor     | `lpk25-editor.rb` |
 | `Sublime Text 2.app`   | Sublime Text        | sublime-text     | `sublime-text.rb` |
 
+For versioned/development channel casks:
+
+| Standard Cask Token     | Derivative          | Cask Token           | Filename  |
+|------------------------|---------------------|-----------------------|----------------------|
+| `google-chrome`        | Beta Channel        | `google-chrome@beta`  | `google-chrome@beta.rb` |
+| `vlc`                  | Nightly Channel     | `vlc@nightly`         | `vlc@nightly.rb` |
+| `carbon-copy-cloner`   | Pinned to version 5 | `carbon-copy-cloner@5`| `carbon-copy-cloner@5.rb` |
+
 #### Tap-specific cask token examples
 
 Cask taps have naming conventions specific to each tap.
 
-* [Homebrew/cask-versions](https://github.com/Homebrew/homebrew-cask-versions/blob/HEAD/CONTRIBUTING.md#naming-versions-casks)
 * [Homebrew/cask-fonts](https://github.com/Homebrew/homebrew-cask-fonts/blob/HEAD/CONTRIBUTING.md#naming-font-casks)
 
 ### Special affixes

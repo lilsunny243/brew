@@ -7,8 +7,6 @@ module RuboCop
   module Cop
     module FormulaAudit
       # This cop makes sure that a `keg_only` reason has the correct format.
-      #
-      # @api private
       class KegOnly < FormulaCop
         extend AutoCorrector
 
@@ -34,7 +32,7 @@ module RuboCop
           reason = string_content(reason).sub(name, "")
           first_word = reason.split.first
 
-          if reason =~ /\A[A-Z]/ && !reason.start_with?(*allowlist)
+          if /\A[A-Z]/.match?(reason) && !reason.start_with?(*allowlist)
             problem "'#{first_word}' from the `keg_only` reason should be '#{first_word.downcase}'." do |corrector|
               reason[0] = reason[0].downcase
               corrector.replace(@offensive_node.source_range, "\"#{reason}\"")

@@ -5,8 +5,6 @@ require "utils/curl"
 require "utils/github"
 
 # Helper module for updating SPDX license data.
-#
-# @api private
 module SPDX
   module_function
 
@@ -44,14 +42,14 @@ module SPDX
       licenses.push license_expression
     when Hash, Array
       if license_expression.is_a? Hash
-        license_expression = license_expression.map do |key, value|
+        license_expression = license_expression.filter_map do |key, value|
           if key.is_a? String
             licenses.push key
             exceptions.push value[:with]
             next
           end
           value
-        end.compact
+        end
       end
 
       license_expression.each do |license|
@@ -102,7 +100,7 @@ module SPDX
           expressions.push "#{hash_type} with #{license_expression[hash_type][:with]}"
         else
           expressions += license_expression[hash_type].map do |license|
-            license_expression_to_string license, bracket: true, hash_type: hash_type
+            license_expression_to_string license, bracket: true, hash_type:
           end
         end
       else

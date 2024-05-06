@@ -3,7 +3,7 @@
 require "livecheck/strategy"
 require "bundle_version"
 
-describe Homebrew::Livecheck::Strategy::Sparkle do
+RSpec.describe Homebrew::Livecheck::Strategy::Sparkle do
   subject(:sparkle) { described_class }
 
   def create_appcast_xml(items_str = "")
@@ -174,13 +174,13 @@ describe Homebrew::Livecheck::Strategy::Sparkle do
     undefined_namespace = appcast.sub(/\s*xmlns:sparkle="[^"]+"/, "")
 
     {
-      appcast:             appcast,
-      omitted_items:       omitted_items,
-      bad_macos_version:   bad_macos_version,
-      beta_channel_item:   beta_channel_item,
-      no_versions_item:    no_versions_item,
-      no_items:            no_items,
-      undefined_namespace: undefined_namespace,
+      appcast:,
+      omitted_items:,
+      bad_macos_version:,
+      beta_channel_item:,
+      no_versions_item:,
+      no_items:,
+      undefined_namespace:,
     }
   end
 
@@ -395,7 +395,7 @@ describe Homebrew::Livecheck::Strategy::Sparkle do
       ).to eq([items[:v121].nice_version])
     end
 
-    it "returns an array of version strings when given content, a regex, and a block" do
+    it "returns an array of version strings when given content, a regex and a block" do
       # Returning a string from the block
       expect(
         sparkle.versions_from_content(xml[:appcast], title_regex) do |item, regex|

@@ -4,8 +4,6 @@
 require "cask_dependent"
 
 # Helper functions for dependencies.
-#
-# @api private
 module DependenciesHelpers
   def args_includes_ignores(args)
     includes = [:required?, :recommended?] # included by default
@@ -25,7 +23,7 @@ module DependenciesHelpers
 
     cache_key = "recursive_includes_#{includes}_#{ignores}"
 
-    klass.expand(root_dependent, cache_key: cache_key) do |dependent, dep|
+    klass.expand(root_dependent, cache_key:) do |dependent, dep|
       klass.prune if ignores.any? { |ignore| dep.public_send(ignore) }
       klass.prune if includes.none? do |include|
         # Ignore indirect test dependencies
@@ -35,7 +33,7 @@ module DependenciesHelpers
       end
 
       # If a tap isn't installed, we can't find the dependencies of one of
-      # its formulae, and an exception will be thrown if we try.
+      # its formulae and an exception will be thrown if we try.
       Dependency.keep_but_prune_recursive_deps if klass == Dependency && dep.tap && !dep.tap.installed?
     end
   end

@@ -2,7 +2,7 @@
 
 require "sandbox"
 
-describe Sandbox, :needs_macos do
+RSpec.describe Sandbox, :needs_macos do
   define_negated_matcher :not_matching, :matching
 
   subject(:sandbox) { described_class.new }
@@ -15,7 +15,7 @@ describe Sandbox, :needs_macos do
   end
 
   specify "#allow_write" do
-    sandbox.allow_write file
+    sandbox.allow_write path: file
     sandbox.exec "touch", file
 
     expect(file).to exist

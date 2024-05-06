@@ -2,7 +2,7 @@
 
 require "extend/ENV"
 
-describe "ENV" do
+RSpec.describe "ENV" do
   shared_examples EnvActivation do
     subject(:env) { env_activation.extend(described_class) }
 
@@ -73,8 +73,8 @@ describe "ENV" do
         expect(subject["foo"]).to eq("1")
       end
 
-      # NOTE: this may be a wrong behavior; we should probably reject objects that
-      # do not respond to #to_str. For now this documents existing behavior.
+      # NOTE: This may be a wrong behavior; we should probably reject objects that
+      #       do not respond to `#to_str`. For now this documents existing behavior.
       it "coerces a value to a string" do
         subject.append "foo", 42
         expect(subject["foo"]).to eq("42")
@@ -162,12 +162,6 @@ describe "ENV" do
         subject["FOO"] = "bar"
         subject.clear_sensitive_environment!
         expect(subject["FOO"]).to eq "bar"
-      end
-    end
-
-    describe "#compiler_any_clang?" do
-      it "returns true for llvm_clang" do
-        expect(subject.compiler_any_clang?(:llvm_clang)).to be true
       end
     end
   end

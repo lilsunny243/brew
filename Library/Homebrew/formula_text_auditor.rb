@@ -3,8 +3,6 @@
 
 module Homebrew
   # Auditor for checking common violations in {Formula} text content.
-  #
-  # @api private
   class FormulaTextAuditor
     def initialize(path)
       @text = path.open("rb", &:read)
@@ -16,7 +14,7 @@ module Homebrew
     end
 
     def trailing_newline?
-      /\Z\n/ =~ @text
+      /\Z\n/.match?(@text)
     end
 
     def =~(other)
@@ -27,17 +25,18 @@ module Homebrew
       @text.include? string
     end
 
+    sig { returns(String) }
     def to_s
       @text
     end
 
     def line_number(regex, skip = 0)
-      index = @lines.drop(skip).index { |line| line =~ regex }
+      index = @lines.drop(skip).index { |line| line.match?(regex) }
       index ? index + 1 : nil
     end
 
     def reverse_line_number(regex)
-      index = @lines.reverse.index { |line| line =~ regex }
+      index = @lines.reverse.index { |line| line.match?(regex) }
       index ? @lines.count - index : nil
     end
   end

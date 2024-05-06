@@ -5,12 +5,20 @@ require "utils/curl"
 require "utils/github/api"
 
 # Auditing functions for rules common to both casks and formulae.
-#
-# @api private
 module SharedAudits
   URL_TYPE_HOMEPAGE = "homepage URL"
 
   module_function
+
+  def eol_data(product, cycle)
+    @eol_data ||= {}
+    @eol_data["#{product}/#{cycle}"] ||= begin
+      out, _, status = Utils::Curl.curl_output("--location", "https://endoflife.date/api/#{product}/#{cycle}.json")
+      json = JSON.parse(out) if status.success?
+      json = nil if json&.dig("message")&.include?("Product not found")
+      json
+    end
+  end
 
   def github_repo_data(user, repo)
     @github_repo_data ||= {}
@@ -132,7 +140,7 @@ module SharedAudits
     metadata = JSON.parse(out)
     return if metadata.nil?
 
-    return "Uses deprecated mercurial support in Bitbucket" if metadata["scm"] == "hg"
+    return "Uses deprecated Mercurial support in Bitbucket" if metadata["scm"] == "hg"
 
     return "Bitbucket fork (not canonical repository)" unless metadata["parent"].nil?
 

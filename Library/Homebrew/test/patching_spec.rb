@@ -2,7 +2,7 @@
 
 require "formula"
 
-describe "patching" do
+RSpec.describe "patching", type: :system do
   let(:formula_subclass) do
     Class.new(Formula) do
       # These are defined within an anonymous class to avoid polluting the global namespace.
@@ -25,7 +25,7 @@ describe "patching" do
 
   def formula(name = "formula_name", path: Formulary.core_path(name), spec: :stable, alias_path: nil, &block)
     formula_subclass.class_eval(&block)
-    formula_subclass.new(name, path, spec, alias_path: alias_path)
+    formula_subclass.new(name, path, spec, alias_path:)
   end
 
   matcher :be_patched do
@@ -229,15 +229,3 @@ describe "patching" do
     end.to raise_error(BuildError)
   end
 end
-
-__END__
-diff --git a/libexec/NOOP b/libexec/NOOP
-index bfdda4c..e08d8f4 100755
---- a/libexec/NOOP
-+++ b/libexec/NOOP
-@@ -1,2 +1,2 @@
- #!/bin/bash
--echo NOOP
-\ No newline at end of file
-+echo ABCD
-\ No newline at end of file

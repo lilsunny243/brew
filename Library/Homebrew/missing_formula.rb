@@ -5,13 +5,11 @@ require "formulary"
 
 module Homebrew
   # Helper module for checking if there is a reason a formula is missing.
-  #
-  # @api private
   module MissingFormula
     class << self
       def reason(name, silent: false, show_info: false)
-        cask_reason(name, silent: silent, show_info: show_info) || disallowed_reason(name) ||
-          tap_migration_reason(name) || deleted_reason(name, silent: silent)
+        cask_reason(name, silent:, show_info:) || disallowed_reason(name) ||
+          tap_migration_reason(name) || deleted_reason(name, silent:)
       end
 
       def disallowed_reason(name)

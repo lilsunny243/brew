@@ -1,8 +1,8 @@
 ---
 require:
   - ./Homebrew/rubocops.rb
+  - rubocop-md
   - rubocop-performance
-  - rubocop-rails
   - rubocop-rspec
   - rubocop-sorbet
 
@@ -13,14 +13,12 @@ inherit_mode:
 
 AllCops:
   TargetRubyVersion: 3.1
-  ActiveSupportExtensionsEnabled: true
   NewCops: enable
   Include:
     - "**/*.rbi"
   Exclude:
-    - "Homebrew/sorbet/rbi/gems/**/*.rbi"
-    - "Homebrew/sorbet/rbi/hidden-definitions/*.rbi"
-    - "Homebrew/sorbet/rbi/todo.rbi"
+    - "Homebrew/sorbet/rbi/{dsl,gems}/**/*.rbi"
+    - "Homebrew/sorbet/rbi/parlour.rbi"
     - "Homebrew/bin/*"
     - "Homebrew/vendor/**/*"
     - "Taps/*/*/vendor/**/*"
@@ -52,9 +50,26 @@ FormulaAuditStrict:
 Homebrew:
   Enabled: true
 
+Homebrew/Blank:
+  Exclude:
+    # Core extensions are not available here:
+    - "Homebrew/startup/bootsnap.rb"
+
+Homebrew/CompactBlank:
+  Exclude:
+    # `blank?` is not necessarily available here:
+    - "Homebrew/extend/enumerable.rb"
+
 # only used internally
 Homebrew/MoveToExtendOS:
   Enabled: false
+
+Homebrew/NegateInclude:
+  Exclude:
+    # `exclude?` is not available here:
+    - "Homebrew/standalone/init.rb"
+    - "Homebrew/rubocops/**/*"
+    - "Homebrew/sorbet/tapioca/**/*"
 
 # `system` is a special case and aligns on second argument, so allow this for formulae.
 Layout/ArgumentAlignment:
@@ -113,6 +128,7 @@ Layout/LineLength:
       '"/Library/PreferencePanes/',
       ' "~/Library/Application Support/',
       '"~/Library/Caches/',
+      '"~/Library/Containers',
       '"~/Application Support',
       " was verified as official when first introduced to the cask",
     ]
@@ -152,6 +168,10 @@ Lint/UnusedMethodArgument:
 
 # These metrics didn't end up helping.
 Metrics:
+  Enabled: false
+
+# Disabled because it breaks Sorbet: "The declaration for `with` is missing parameter(s): & (RuntimeError)"
+Naming/BlockForwarding:
   Enabled: false
 
 # Allow dashes in filenames.
@@ -200,58 +220,12 @@ Performance/CaseWhenSplat:
 Performance/MethodObjectAsBlock:
   Enabled: false
 
-Rails:
-  # Selectively enable what we want.
-  Enabled: false
-  # Do not use ActiveSupport in RuboCops.
-  Exclude:
-    - "Homebrew/rubocops/**/*"
-
-# These relate to ActiveSupport and not other parts of Rails.
-Rails/ActiveSupportAliases:
-  Enabled: true
-Rails/Blank:
-  Enabled: true
-Rails/CompactBlank:
-  Enabled: true
-Rails/Delegate:
-  Enabled: false # TODO
-Rails/DelegateAllowBlank:
-  Enabled: true
-Rails/DurationArithmetic:
-  Enabled: true
-Rails/ExpandedDateRange:
-  Enabled: true
-Rails/Inquiry:
-  Enabled: true
-Rails/NegateInclude:
-  Enabled: true
-Rails/PluralizationGrammar:
-  Enabled: true
-Rails/Presence:
-  Enabled: true
-Rails/Present:
-  Enabled: true
-  Exclude:
-    # `present?` is defined as `!blank?` wihin this file
-    - "Homebrew/extend/blank.rb"
-Rails/RelativeDateConstant:
-  Enabled: true
-Rails/SafeNavigation:
-  Enabled: true
-Rails/SafeNavigationWithBlank:
-  Enabled: true
-Rails/StripHeredoc:
-  Enabled: true
-Rails/ToFormattedS:
-  Enabled: true
+RSpec:
+  Include:
+    - 'Homebrew/test/**/*'
 
 # Intentionally disabled as it doesn't fit with our code style.
 RSpec/AnyInstance:
-  Enabled: false
-RSpec/DescribeClass:
-  Enabled: false
-RSpec/FilePath:
   Enabled: false
 RSpec/SpecFilePathFormat:
   Enabled: false
@@ -259,11 +233,6 @@ RSpec/StubbedMock:
   Enabled: false
 RSpec/SubjectStub:
   Enabled: false
-
-# We use `allow(:foo).to receive(:bar)` everywhere.
-RSpec/MessageSpies:
-  EnforcedStyle: receive
-
 # These were ever-growing numbers, not useful.
 RSpec/ExampleLength:
   Enabled: false
@@ -274,9 +243,16 @@ RSpec/NestedGroups:
 RSpec/MultipleMemoizedHelpers:
   Enabled: false
 
+RSpec/DescribedClassModuleWrapping:
+  Enabled: true
+RSpec/FilePath:
+  SpecSuffixOnly: true
 # Annoying to have these autoremoved.
 RSpec/Focus:
   AutoCorrect: false
+# We use `allow(:foo).to receive(:bar)` everywhere.
+RSpec/MessageSpies:
+  EnforcedStyle: receive
 
 # Try getting rid of these.
 Sorbet/ConstantsFromStrings:
@@ -284,6 +260,10 @@ Sorbet/ConstantsFromStrings:
 
 # This is already the default
 Sorbet/FalseSigil:
+  Enabled: false
+
+# We generally prefer to colo rbi files with the Ruby files they describe.
+Sorbet/ForbidRBIOutsideOfAllowedPaths:
   Enabled: false
 
 # T::Sig is monkey-patched into Module
@@ -301,7 +281,6 @@ Sorbet/StrictSigil:
 Sorbet/TrueSigil:
   Enabled: true
   Exclude:
-    - "Homebrew/standalone/init.rb" # loaded before sorbet-runtime
     - "Taps/**/*"
     - "/**/{Formula,Casks}/**/*.rb"
     - "**/{Formula,Casks}/**/*.rb"
@@ -310,6 +289,10 @@ Sorbet/TrueSigil:
 # Require &&/|| instead of and/or
 Style/AndOr:
   EnforcedStyle: always
+
+# Disabled because it breaks Sorbet: "The declaration for `with` is missing parameter(s): & (RuntimeError)"
+Style/ArgumentsForwarding:
+  Enabled: false
 
 # Avoid leaking resources.
 Style/AutoResourceCleanup:
@@ -322,6 +305,10 @@ Style/BarePercentLiterals:
 Style/BlockDelimiters:
   BracesRequiredMethods:
     - "sig"
+
+Style/ClassAndModuleChildren:
+  Exclude:
+    - "**/*.rbi"
 
 # Use consistent style for better readability.
 Style/CollectionMethods:
@@ -376,6 +363,10 @@ Style/HashAsLastArrayItem:
     - "/**/Formula/**/*.rb"
     - "**/Formula/**/*.rb"
 
+Style/InverseMethods:
+  InverseMethods:
+    :blank?: :present?
+
 Style/InvertibleUnlessCondition:
   Enabled: true
   InverseMethods:
@@ -383,8 +374,7 @@ Style/InvertibleUnlessCondition:
     :==: :!=
     # Unset this (prefer `unless a.zero?` over `if a.nonzero?`)
     :zero?:
-    # Don't require non-standard `exclude?` (for now at least) - it's not available in every file
-    :include?:
+    :blank?: :present?
 
 Style/MutableConstant:
   # would rather freeze too much than too little
@@ -403,10 +393,11 @@ Style/NumericLiterals:
 
 Style/OpenStructUse:
   Exclude:
-    - "Taps/**/*.rb"
+    - "Taps/**/*"
     # TODO: This is a pre-existing violation and should be corrected
     #   to define methods so that call sites can be type-checked.
     - "Homebrew/cli/args.rb"
+    - "Homebrew/cli/args.rbi"
 
 # Rescuing `StandardError` is an understood default.
 Style/RescueStandardError:
@@ -453,6 +444,11 @@ Style/SymbolArray:
 Style/TernaryParentheses:
   EnforcedStyle: require_parentheses_when_complex
 
+Style/TopLevelMethodDefinition:
+  Enabled: true
+  Exclude:
+    - "Taps/**/*"
+
 # Trailing commas make diffs nicer.
 Style/TrailingCommaInArguments:
   EnforcedStyleForMultiline: comma
@@ -469,21 +465,3 @@ Style/UnlessLogicalOperators:
 # a bit confusing to non-Rubyists but useful for longer arrays
 Style/WordArray:
   MinSize: 4
-
-# TODO: Enable these cops once https://github.com/Homebrew/brew/pull/16337#issuecomment-1855668516 is done.
-Lint/RedundantDirGlobSort:
-  Enabled: false
-Naming/BlockForwarding:
-  Enabled: false
-Performance/BindCall:
-  Enabled: false
-Performance/MapCompact:
-  Enabled: false
-Style/ArgumentsForwarding:
-  Enabled: false
-Style/ArrayIntersect:
-  Enabled: false
-Style/HashSyntax:
-  EnforcedShorthandSyntax: either
-Style/RedundantFreeze:
-  Enabled: false

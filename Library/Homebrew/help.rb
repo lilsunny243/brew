@@ -6,8 +6,6 @@ require "commands"
 
 module Homebrew
   # Helper module for printing help output.
-  #
-  # @api private
   module Help
     # NOTE: Keep the length of vanilla `--help` less than 25 lines!
     #       This is because the default Terminal height is 25 lines. Scrolling sucks
@@ -59,7 +57,7 @@ module Homebrew
 
       # Display command-specific (or generic) help in response to `UsageError`.
       if usage_error
-        $stderr.puts path ? command_help(cmd, path, remaining_args: remaining_args) : HOMEBREW_HELP
+        $stderr.puts path ? command_help(cmd, path, remaining_args:) : HOMEBREW_HELP
         $stderr.puts
         onoe usage_error
         exit 1
@@ -69,7 +67,7 @@ module Homebrew
       return if path.nil?
 
       # Display help for internal command (or generic help if undocumented).
-      puts command_help(cmd, path, remaining_args: remaining_args)
+      puts command_help(cmd, path, remaining_args:)
       exit 0
     end
 
@@ -78,7 +76,7 @@ module Homebrew
       output = if Commands.valid_internal_cmd?(cmd) ||
                   Commands.valid_internal_dev_cmd?(cmd) ||
                   Commands.external_ruby_v2_cmd_path(cmd)
-        parser_help(path, remaining_args: remaining_args)
+        parser_help(path, remaining_args:)
       end
 
       output ||= comment_help(path)
@@ -116,7 +114,7 @@ module Homebrew
       help_lines = command_help_lines(path)
       return if help_lines.blank?
 
-      Formatter.format_help_text(help_lines.join, width: COMMAND_DESC_WIDTH)
+      Formatter.format_help_text(help_lines.join, width: Formatter::COMMAND_DESC_WIDTH)
                .sub("@hide_from_man_page ", "")
                .sub(/^\* /, "#{Tty.bold}Usage: brew#{Tty.reset} ")
                .gsub(/`(.*?)`/m, "#{Tty.bold}\\1#{Tty.reset}")

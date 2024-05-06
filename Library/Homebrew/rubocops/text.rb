@@ -7,8 +7,6 @@ module RuboCop
   module Cop
     module FormulaAudit
       # This cop checks for various problems in a formula's source code.
-      #
-      # @api private
       class Text < FormulaCop
         extend AutoCorrector
 
@@ -18,7 +16,7 @@ module RuboCop
           if (match = full_source_content.match(/^require ['"]formula['"]$/))
             range = source_range(source_buffer(node), match.pre_match.count("\n") + 1, 0, match[0].length)
             add_offense(range, message: "`#{match}` is now unnecessary") do |corrector|
-              corrector.remove(range_with_surrounding_space(range: range))
+              corrector.remove(range_with_surrounding_space(range:))
             end
           end
 
@@ -107,8 +105,6 @@ module RuboCop
 
     module FormulaAuditStrict
       # This cop contains stricter checks for various problems in a formula's source code.
-      #
-      # @api private
       class Text < FormulaCop
         def audit_formula(_node, _class_node, _parent_class_node, body_node)
           return if body_node.nil?

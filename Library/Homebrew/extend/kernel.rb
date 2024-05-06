@@ -55,34 +55,45 @@ module Kernel
   end
 
   def oh1(title, truncate: :auto)
-    puts oh1_title(title, truncate: truncate)
+    puts oh1_title(title, truncate:)
   end
 
-  # Print a message prefixed with "Warning" (do this rarely).
+  # Print a warning message.
+  #
+  # @api public
   def opoo(message)
     Tty.with($stderr) do |stderr|
       stderr.puts Formatter.warning(message, label: "Warning")
     end
   end
 
-  # Print a message prefixed with "Error".
+  # Print an error message.
+  #
+  # @api public
   def onoe(message)
     Tty.with($stderr) do |stderr|
       stderr.puts Formatter.error(message, label: "Error")
     end
   end
 
+  # Print an error message and fail at the end of the program.
+  #
+  # @api public
   def ofail(error)
     onoe error
     Homebrew.failed = true
   end
 
+  # Print an error message and fail immediately.
+  #
+  # @api public
   sig { params(error: T.any(String, Exception)).returns(T.noreturn) }
   def odie(error)
     onoe error
     exit 1
   end
 
+  # Output a deprecation warning/error message.
   def odeprecated(method, replacement = nil,
                   disable:                false,
                   disable_on:             nil,
@@ -147,16 +158,18 @@ module Kernel
 
     disable = true if disable_for_developers && Homebrew::EnvConfig.developer?
     if disable || Homebrew.raise_deprecation_exceptions?
+      puts "::error::#{message}" if ENV["GITHUB_ACTIONS"]
       exception = MethodDeprecatedError.new(message)
       exception.set_backtrace(backtrace)
       raise exception
     elsif !Homebrew.auditing?
+      puts "::warning::#{message}" if ENV["GITHUB_ACTIONS"]
       opoo message
     end
   end
 
   def odisabled(method, replacement = nil, **options)
-    options = { disable: true, caller: caller }.merge(options)
+    options = { disable: true, caller: }.merge(options)
     # This odeprecated should stick around indefinitely.
     odeprecated(method, replacement, **options)
   end
@@ -242,7 +255,9 @@ module Kernel
     raise ErrorDuringExecution.new([cmd, *args], status: $CHILD_STATUS)
   end
 
-  # Prints no output.
+  # Run a system comand without any output.
+  #
+  # @api internal
   def quiet_system(cmd, *args)
     Homebrew._system(cmd, *args) do
       # Redirect output streams to `/dev/null` instead of closing as some programs
@@ -252,6 +267,9 @@ module Kernel
     end
   end
 
+  # Find a command.
+  #
+  # @api public
   def which(cmd, path = ENV.fetch("PATH"))
     PATH.new(path).each do |p|
       begin
@@ -267,7 +285,7 @@ module Kernel
   end
 
   def which_all(cmd, path = ENV.fetch("PATH"))
-    PATH.new(path).map do |p|
+    PATH.new(path).filter_map do |p|
       begin
         pcmd = File.expand_path(cmd, p)
       rescue ArgumentError
@@ -276,7 +294,7 @@ module Kernel
         next
       end
       Pathname.new(pcmd) if File.file?(pcmd) && File.executable?(pcmd)
-    end.compact.uniq
+    end.uniq
   end
 
   def which_editor(silent: false)
@@ -364,8 +382,8 @@ module Kernel
       end
       # Call this method itself with redirected stdout
       redirect_stdout(file) do
-        return ensure_formula_installed!(formula_or_name, latest: latest,
-                                         reason: reason, output_to_stderr: false)
+        return ensure_formula_installed!(formula_or_name, latest:,
+                                         reason:, output_to_stderr: false)
       end
     end
 
@@ -399,11 +417,14 @@ module Kernel
     executable = [
       which(name),
       which(name, ORIGINAL_PATHS),
+      # We prefer the opt_bin path to a formula's executable over the prefix
+      # path where available, since the former is stable during upgrades.
+      HOMEBREW_PREFIX/"opt/#{formula_name}/bin/#{name}",
       HOMEBREW_PREFIX/"bin/#{name}",
     ].compact.first
     return executable if executable.exist?
 
-    ensure_formula_installed!(formula_name, reason: reason).opt_bin/name
+    ensure_formula_installed!(formula_name, reason:).opt_bin/name
   end
 
   def paths
@@ -429,7 +450,7 @@ module Kernel
     if ((size * 10).to_i % 10).zero?
       "#{size.to_i}#{unit}"
     else
-      "#{format("%<size>.1f", size: size)}#{unit}"
+      "#{format("%<size>.1f", size:)}#{unit}"
     end
   end
 
@@ -472,14 +493,20 @@ module Kernel
   end
 
   # Calls the given block with the passed environment variables
-  # added to ENV, then restores ENV afterwards.
-  # <pre>with_env(PATH: "/bin") do
-  #   system "echo $PATH"
-  # end</pre>
+  # added to `ENV`, then restores `ENV` afterwards.
   #
-  # @note This method is *not* thread-safe - other threads
-  #   which happen to be scheduled during the block will also
-  #   see these environment variables.
+  # NOTE: This method is **not** thread-safe – other threads
+  #       which happen to be scheduled during the block will also
+  #       see these environment variables.
+  #
+  # ### Example
+  #
+  # ```ruby
+  # with_env(PATH: "/bin") do
+  #   system "echo $PATH"
+  # end
+  # ```
+  #
   # @api public
   def with_env(hash)
     old_values = {}

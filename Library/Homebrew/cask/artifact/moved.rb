@@ -7,8 +7,6 @@ require "cask/quarantine"
 module Cask
   module Artifact
     # Superclass for all artifacts that are installed by moving them to the target location.
-    #
-    # @api private
     class Moved < Relocated
       sig { returns(String) }
       def self.english_description
@@ -46,18 +44,40 @@ module Cask
               if target.parent.writable? && !force
                 target.rmdir
               else
-                Utils.gain_permissions_remove(target, command: command)
+                Utils.gain_permissions_remove(target, command:)
               end
             end
           else
             if adopt
               ohai "Adopting existing #{self.class.english_name} at '#{target}'"
-              same = command.run(
-                "/usr/bin/diff",
-                args:         ["--recursive", "--brief", source, target],
-                verbose:      verbose,
-                print_stdout: verbose,
-              ).success?
+
+              source_plist = Pathname("#{source}/Contents/Info.plist")
+              target_plist = Pathname("#{target}/Contents/Info.plist")
+              same = if source_plist.size? &&
+                        (source_bundle_version = Homebrew::BundleVersion.from_info_plist(source_plist)) &&
+                        target_plist.size? &&
+                        (target_bundle_version = Homebrew::BundleVersion.from_info_plist(target_plist))
+                if source_bundle_version.short_version == target_bundle_version.short_version
+                  if source_bundle_version.version == target_bundle_version.version
+                    true
+                  else
+                    onoe "The bundle version of #{source} is #{source_bundle_version.version} but " \
+                         "is #{target_bundle_version.version} for #{target}!"
+                    false
+                  end
+                else
+                  onoe "The bundle short version of #{source} is #{source_bundle_version.short_version} but " \
+                       "is #{target_bundle_version.short_version} for #{target}!"
+                  false
+                end
+              else
+                command.run(
+                  "/usr/bin/diff",
+                  args:         ["--recursive", "--brief", source, target],
+                  verbose:,
+                  print_stdout: verbose,
+                ).success?
+              end
 
               unless same
                 raise CaskError,
@@ -73,25 +93,25 @@ module Cask
 
             message = "It seems there is already #{self.class.english_article} " \
                       "#{self.class.english_name} at '#{target}'"
-            raise CaskError, "#{message}." unless force
+            raise CaskError, "#{message}." if !force && !adopt
 
             opoo "#{message}; overwriting."
-            delete(target, force: force, command: command, **options)
+            delete(target, force:, command:, **options)
           end
         end
 
         ohai "Moving #{self.class.english_name} '#{source.basename}' to '#{target}'"
 
-        Utils.gain_permissions_mkpath(target.dirname, command: command) unless target.dirname.exist?
+        Utils.gain_permissions_mkpath(target.dirname, command:) unless target.dirname.exist?
 
-        if target.directory? && Quarantine.app_management_permissions_granted?(app: target, command: command)
+        if target.directory? && Quarantine.app_management_permissions_granted?(app: target, command:)
           if target.writable?
             source.children.each { |child| FileUtils.move(child, target/child.basename) }
           else
             command.run!("/bin/cp", args: ["-pR", *source.children, target],
                                     sudo: true)
           end
-          Quarantine.copy_xattrs(source, target, command: command)
+          Quarantine.copy_xattrs(source, target, command:)
           source.rmtree
         elsif target.dirname.writable?
           FileUtils.move(source, target)
@@ -109,7 +129,7 @@ module Cask
       def post_move(command)
         FileUtils.ln_sf target, source
 
-        add_altname_metadata(target, source.basename, command: command)
+        add_altname_metadata(target, source.basename, command:)
       end
 
       def matching_artifact?(cask)
@@ -120,16 +140,16 @@ module Cask
         end
       end
 
-      def move_back(skip: false, force: false, command: nil, **options)
+      def move_back(skip: false, force: false, adopt: false, command: nil, **options)
         FileUtils.rm source if source.symlink? && source.dirname.join(source.readlink) == target
 
         if Utils.path_occupied?(source)
           message = "It seems there is already #{self.class.english_article} " \
                     "#{self.class.english_name} at '#{source}'"
-          raise CaskError, "#{message}." unless force
+          raise CaskError, "#{message}." if !force && !adopt
 
           opoo "#{message}; overwriting."
-          delete(source, force: force, command: command, **options)
+          delete(source, force:, command:, **options)
         end
 
         unless target.exist?
@@ -144,7 +164,7 @@ module Cask
         # We need to preserve extended attributes between copies.
         command.run!("/bin/cp", args: ["-pR", target, source], sudo: !source.parent.writable?)
 
-        delete(target, force: force, command: command, **options)
+        delete(target, force:, command:, **options)
       end
 
       def delete(target, force: false, successor: nil, command: nil, **_)
@@ -154,21 +174,15 @@ module Cask
         return unless Utils.path_occupied?(target)
 
         if target.directory? && matching_artifact?(successor) && Quarantine.app_management_permissions_granted?(
-          app: target, command: command,
+          app: target, command:,
         )
           # If an app folder is deleted, macOS considers the app uninstalled and removes some data.
           # Remove only the contents to handle this case.
           target.children.each do |child|
-            if target.writable? && !force
-              child.rmtree
-            else
-              Utils.gain_permissions_remove(child, command: command)
-            end
+            Utils.gain_permissions_remove(child, command:)
           end
-        elsif target.parent.writable? && !force
-          target.rmtree
         else
-          Utils.gain_permissions_remove(target, command: command)
+          Utils.gain_permissions_remove(target, command:)
         end
       end
     end

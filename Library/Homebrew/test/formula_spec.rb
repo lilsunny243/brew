@@ -3,7 +3,7 @@
 require "test/support/fixtures/testball"
 require "formula"
 
-describe Formula do
+RSpec.describe Formula do
   alias_matcher :follow_installed_alias, :be_follow_installed_alias
   alias_matcher :have_any_version_installed, :be_any_version_installed
   alias_matcher :need_migration, :be_migration_needed
@@ -28,9 +28,9 @@ describe Formula do
     let(:path) { Formulary.core_path(name) }
     let(:spec) { :stable }
     let(:alias_name) { "baz@1" }
-    let(:alias_path) { (CoreTap.instance.alias_dir/alias_name).to_s }
+    let(:alias_path) { CoreTap.instance.alias_dir/alias_name }
     let(:f) { klass.new(name, path, spec) }
-    let(:f_alias) { klass.new(name, path, spec, alias_path: alias_path) }
+    let(:f_alias) { klass.new(name, path, spec, alias_path:) }
 
     specify "formula instantiation" do
       expect(f.name).to eq(name)
@@ -42,6 +42,7 @@ describe Formula do
       expect(f.alias_name).to be_nil
       expect(f.full_alias_name).to be_nil
       expect(f.specified_path).to eq(path)
+      [:build, :test, :postinstall].each { |phase| expect(f.network_access_allowed?(phase)).to be(true) }
       expect { klass.new }.to raise_error(ArgumentError)
     end
 
@@ -55,11 +56,12 @@ describe Formula do
       expect(f_alias.specified_path).to eq(Pathname(alias_path))
       expect(f_alias.full_alias_name).to eq(alias_name)
       expect(f_alias.full_specified_name).to eq(alias_name)
+      [:build, :test, :postinstall].each { |phase| expect(f_alias.network_access_allowed?(phase)).to be(true) }
       expect { klass.new }.to raise_error(ArgumentError)
     end
 
     context "when in a Tap" do
-      let(:tap) { Tap.new("foo", "bar") }
+      let(:tap) { Tap.fetch("foo", "bar") }
       let(:path) { (tap.path/"Formula/#{name}.rb") }
       let(:full_name) { "#{tap.user}/#{tap.repo}/#{name}" }
       let(:full_alias_name) { "#{tap.user}/#{tap.repo}/#{alias_name}" }
@@ -190,11 +192,11 @@ describe Formula do
     end
 
     alias_name = "bar"
-    alias_path = "#{CoreTap.instance.alias_dir}/#{alias_name}"
+    alias_path = CoreTap.instance.alias_dir/alias_name
     CoreTap.instance.alias_dir.mkpath
     FileUtils.ln_sf f.path, alias_path
 
-    f.build = Tab.new(source: { "path" => alias_path })
+    f.build = Tab.new(source: { "path" => alias_path.to_s })
 
     expect(f.installed_alias_path).to eq(alias_path)
     expect(f.installed_alias_name).to eq(alias_name)
@@ -204,10 +206,10 @@ describe Formula do
   end
 
   example "installed alias with tap" do
-    tap = Tap.new("user", "repo")
+    tap = Tap.fetch("user", "repo")
     name = "foo"
     path = tap.path/"Formula/#{name}.rb"
-    f = formula name, path: path do
+    f = formula(name, path:) do
       url "foo-1.0"
     end
 
@@ -225,12 +227,12 @@ describe Formula do
     end
 
     alias_name = "bar"
+    alias_path = tap.alias_dir/alias_name
     full_alias_name = "#{tap.user}/#{tap.repo}/#{alias_name}"
-    alias_path = "#{tap.alias_dir}/#{alias_name}"
     tap.alias_dir.mkpath
     FileUtils.ln_sf f.path, alias_path
 
-    f.build = Tab.new(source: { "path" => alias_path })
+    f.build = Tab.new(source: { "path" => alias_path.to_s })
 
     expect(f.installed_alias_path).to eq(alias_path)
     expect(f.installed_alias_name).to eq(alias_name)
@@ -417,7 +419,7 @@ describe Formula do
     example "alias paths with build options" do
       alias_path = (CoreTap.instance.alias_dir/"another_name")
 
-      f = formula alias_path: alias_path do
+      f = formula(alias_path:) do
         url "foo-1.0"
       end
       f.build = BuildOptions.new(Options.new, f.options)
@@ -430,7 +432,7 @@ describe Formula do
       alias_path = (CoreTap.instance.alias_dir/"another_name")
       source_path = CoreTap.instance.new_formula_path("another_other_name")
 
-      f = formula alias_path: alias_path do
+      f = formula(alias_path:) do
         url "foo-1.0"
       end
       f.build = Tab.new(source: { "path" => source_path.to_s })
@@ -443,7 +445,7 @@ describe Formula do
       alias_path = (CoreTap.instance.alias_dir/"another_name")
       source_path = (CoreTap.instance.alias_dir/"another_other_name")
 
-      f = formula alias_path: alias_path do
+      f = formula(alias_path:) do
         url "foo-1.0"
       end
       f.build = Tab.new(source: { "path" => source_path.to_s })
@@ -451,7 +453,7 @@ describe Formula do
       FileUtils.ln_sf f.path, source_path
 
       expect(f.alias_path).to eq(alias_path)
-      expect(f.installed_alias_path).to eq(source_path.to_s)
+      expect(f.installed_alias_path).to eq(source_path)
     end
   end
 
@@ -491,14 +493,14 @@ describe Formula do
     end
 
     specify "with alias path with a path" do
-      alias_path = "#{CoreTap.instance.alias_dir}/alias"
-      different_alias_path = "#{CoreTap.instance.alias_dir}/another_alias"
+      alias_path = CoreTap.instance.alias_dir/"alias"
+      different_alias_path = CoreTap.instance.alias_dir/"another_alias"
 
       formula_with_alias = formula "foo" do
         url "foo-1.0"
       end
       formula_with_alias.build = Tab.empty
-      formula_with_alias.build.source["path"] = alias_path
+      formula_with_alias.build.source["path"] = alias_path.to_s
 
       formula_without_alias = formula "bar" do
         url "bar-1.0"
@@ -510,7 +512,7 @@ describe Formula do
         url "baz-1.0"
       end
       formula_with_different_alias.build = Tab.empty
-      formula_with_different_alias.build.source["path"] = different_alias_path
+      formula_with_different_alias.build.source["path"] = different_alias_path.to_s
 
       formulae = [
         formula_with_alias,
@@ -738,7 +740,7 @@ describe Formula do
         url "https://brew.sh/test-1.0.tbz"
       end
 
-      expect(f.service.serialize).to eq({})
+      expect(f.service.to_hash).to eq({})
     end
 
     specify "service complicated" do
@@ -754,7 +756,7 @@ describe Formula do
           keep_alive true
         end
       end
-      expect(f.service.serialize.keys)
+      expect(f.service.to_hash.keys)
         .to contain_exactly(:run, :run_type, :error_log_path, :log_path, :working_dir, :keep_alive)
     end
 
@@ -766,7 +768,7 @@ describe Formula do
         end
       end
 
-      expect(f.service.serialize.keys).to contain_exactly(:run, :run_type)
+      expect(f.service.to_hash.keys).to contain_exactly(:run, :run_type)
     end
 
     specify "service with only custom names" do
@@ -779,7 +781,7 @@ describe Formula do
 
       expect(f.plist_name).to eq("custom.macos.beanstalkd")
       expect(f.service_name).to eq("custom.linux.beanstalkd")
-      expect(f.service.serialize.keys).to contain_exactly(:name)
+      expect(f.service.to_hash.keys).to contain_exactly(:name)
     end
 
     specify "service helpers return data" do
@@ -847,7 +849,7 @@ describe Formula do
       allow(tap_loader).to receive(:get_formula).and_raise(RuntimeError, "tried resolving tap formula")
       allow(Formulary).to receive(:loader_for).with("foo/bar/f1", from: nil).and_return(tap_loader)
 
-      f2_path = Tap.new("baz", "qux").path/"Formula/f2.rb"
+      f2_path = Tap.fetch("baz", "qux").path/"Formula/f2.rb"
       stub_formula_loader(formula("f2", path: f2_path) { url("f2-1.0") }, "baz/qux/f2")
 
       f3 = formula "f3" do
@@ -859,7 +861,7 @@ describe Formula do
 
       expect(f3.runtime_dependencies.map(&:name)).to eq(["baz/qux/f2"])
 
-      f1_path = Tap.new("foo", "bar").path/"Formula/f1.rb"
+      f1_path = Tap.fetch("foo", "bar").path/"Formula/f1.rb"
       stub_formula_loader(formula("f1", path: f1_path) { url("f1-1.0") }, "foo/bar/f1")
 
       f3.build = BuildOptions.new(Options.create(["--with-f1"]), f3.options)
@@ -956,7 +958,7 @@ describe Formula do
   end
 
   describe "#to_hash_with_variations", :needs_macos do
-    let(:formula_path) { CoreTap.new.new_formula_path("foo-variations") }
+    let(:formula_path) { CoreTap.instance.new_formula_path("foo-variations") }
     let(:formula_content) do
       <<~RUBY
         class FooVariations < Formula
@@ -1227,20 +1229,20 @@ describe Formula do
 
   describe "alias changes" do
     let(:f) do
-      formula "formula_name", alias_path: alias_path do
+      formula("formula_name", alias_path:) do
         url "foo-1.0"
       end
     end
 
     let(:new_formula) do
-      formula "new_formula_name", alias_path: alias_path do
+      formula("new_formula_name", alias_path:) do
         url "foo-1.1"
       end
     end
 
     let(:tab) { Tab.empty }
-    let(:alias_path) { "#{CoreTap.instance.alias_dir}/bar" }
     let(:alias_name) { "bar" }
+    let(:alias_path) { CoreTap.instance.alias_dir/alias_name }
 
     before do
       allow(described_class).to receive(:installed).and_return([f])
@@ -1261,7 +1263,7 @@ describe Formula do
     end
 
     specify "alias changes when not changed" do
-      tab.source["path"] = alias_path
+      tab.source["path"] = alias_path.to_s
       stub_formula_loader(f, alias_name)
 
       CoreTap.instance.alias_dir.mkpath
@@ -1276,7 +1278,7 @@ describe Formula do
     end
 
     specify "alias changes when new alias target" do
-      tab.source["path"] = alias_path
+      tab.source["path"] = alias_path.to_s
       stub_formula_loader(new_formula, alias_name)
 
       CoreTap.instance.alias_dir.mkpath
@@ -1291,7 +1293,7 @@ describe Formula do
     end
 
     specify "alias changes when old formulae installed" do
-      tab.source["path"] = alias_path
+      tab.source["path"] = alias_path.to_s
       stub_formula_loader(new_formula, alias_name)
 
       CoreTap.instance.alias_dir.mkpath
@@ -1332,8 +1334,8 @@ describe Formula do
       end
     end
 
-    let(:alias_path) { "#{f.tap.alias_dir}/bar" }
     let(:alias_name) { "bar" }
+    let(:alias_path) { f.tap.alias_dir/alias_name }
 
     def setup_tab_for_prefix(prefix, options = {})
       prefix.mkpath
@@ -1415,7 +1417,7 @@ describe Formula do
     end
 
     example "outdated old alias targets installed" do
-      f = formula alias_path: alias_path do
+      f = formula(alias_path:) do
         url "foo-1.0"
       end
 
@@ -1430,7 +1432,7 @@ describe Formula do
     end
 
     example "outdated old alias targets not installed" do
-      f = formula alias_path: alias_path do
+      f = formula(alias_path:) do
         url "foo-1.0"
       end
 
@@ -1893,6 +1895,41 @@ describe Formula do
       expect(f.bash_completion/"testball").to be_a_file
       expect(f.zsh_completion/"_testball").to be_a_file
       expect(f.fish_completion/"testball.fish").to be_a_file
+    end
+  end
+
+  describe "{allow,deny}_network_access" do
+    phases = [:build, :postinstall, :test].freeze
+    actions = %w[allow deny].freeze
+    phases.each do |phase|
+      actions.each do |action|
+        it "can #{action} network access for #{phase}" do
+          f = Class.new(Testball) do
+            send(:"#{action}_network_access!", phase)
+          end
+
+          expect(f.network_access_allowed?(phase)).to be(action == "allow")
+        end
+      end
+    end
+
+    actions.each do |action|
+      it "can #{action} network access for all phases" do
+        f = Class.new(Testball) do
+          send(:"#{action}_network_access!")
+        end
+
+        phases.each do |phase|
+          expect(f.network_access_allowed?(phase)).to be(action == "allow")
+        end
+      end
+    end
+  end
+
+  describe "#network_access_allowed?" do
+    it "throws an error when passed an invalid symbol" do
+      f = Testball.new
+      expect { f.network_access_allowed?(:foo) }.to raise_error(ArgumentError)
     end
   end
 end

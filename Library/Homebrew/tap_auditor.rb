@@ -3,10 +3,8 @@
 
 module Homebrew
   # Auditor for checking common violations in {Tap}s.
-  #
-  # @api private
   class TapAuditor
-    attr_reader :name, :path, :formula_names, :formula_aliases, :cask_tokens,
+    attr_reader :name, :path, :formula_names, :formula_aliases, :formula_renames, :cask_tokens,
                 :tap_audit_exceptions, :tap_style_exceptions, :tap_pypi_formula_mappings, :problems
 
     sig { params(tap: Tap, strict: T.nilable(T::Boolean)).void }
@@ -14,15 +12,18 @@ module Homebrew
       Homebrew.with_no_api_env do
         @name                      = tap.name
         @path                      = tap.path
-        @cask_tokens               = tap.cask_tokens
         @tap_audit_exceptions      = tap.audit_exceptions
         @tap_style_exceptions      = tap.style_exceptions
         @tap_pypi_formula_mappings = tap.pypi_formula_mappings
         @problems                  = []
 
+        @cask_tokens = tap.cask_tokens.map do |cask_token|
+          cask_token.split("/").last
+        end
         @formula_aliases = tap.aliases.map do |formula_alias|
           formula_alias.split("/").last
         end
+        @formula_renames = tap.formula_renames
         @formula_names = tap.formula_names.map do |formula_name|
           formula_name.split("/").last
         end
@@ -33,6 +34,7 @@ module Homebrew
     def audit
       audit_json_files
       audit_tap_formula_lists
+      audit_aliases_renames_duplicates
     end
 
     sig { void }
@@ -52,9 +54,17 @@ module Homebrew
       check_formula_list "pypi_formula_mappings", @tap_pypi_formula_mappings
     end
 
+    sig { void }
+    def audit_aliases_renames_duplicates
+      duplicates = formula_aliases & formula_renames.keys
+      return if duplicates.none?
+
+      problem "The following should either be an alias or a rename, not both: #{duplicates.to_sentence}"
+    end
+
     sig { params(message: String).void }
     def problem(message)
-      @problems << ({ message: message, location: nil, corrected: false })
+      @problems << ({ message:, location: nil, corrected: false })
     end
 
     private
@@ -73,7 +83,7 @@ module Homebrew
       invalid_formulae_casks = list.select do |formula_or_cask_name|
         formula_names.exclude?(formula_or_cask_name) &&
           formula_aliases.exclude?(formula_or_cask_name) &&
-          cask_tokens.exclude?("#{@name}/#{formula_or_cask_name}")
+          cask_tokens.exclude?(formula_or_cask_name)
       end
 
       return if invalid_formulae_casks.empty?

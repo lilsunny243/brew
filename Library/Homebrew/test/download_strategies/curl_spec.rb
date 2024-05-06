@@ -2,7 +2,7 @@
 
 require "download_strategy"
 
-describe CurlDownloadStrategy do
+RSpec.describe CurlDownloadStrategy do
   subject(:strategy) { described_class.new(url, name, version, **specs) }
 
   let(:name) { "foo" }
@@ -19,7 +19,7 @@ describe CurlDownloadStrategy do
 
   before do
     allow(strategy).to receive(:curl_headers).with(any_args)
-                                             .and_return({ responses: [{ headers: headers }] })
+                                             .and_return({ responses: [{ headers: }] })
   end
 
   it "parses the opts and sets the corresponding args" do

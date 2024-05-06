@@ -5,11 +5,12 @@ require "json"
 
 require "lazy_object"
 require "locale"
+require "extend/hash/keys"
 
 module Cask
   # Configuration for installing casks.
   #
-  # @api private
+  # @api internal
   class Config
     DEFAULT_DIRS = {
       appdir:               "/Applications",
@@ -37,6 +38,7 @@ module Cask
 
     sig { params(args: Homebrew::CLI::Args).returns(T.attached_class) }
     def self.from_args(args)
+      args = T.unsafe(args)
       new(explicit: {
         appdir:               args.appdir,
         keyboard_layoutdir:   args.keyboard_layoutdir,
@@ -65,7 +67,7 @@ module Cask
         default:             config.fetch("default",  {}),
         env:                 config.fetch("env",      {}),
         explicit:            config.fetch("explicit", {}),
-        ignore_invalid_keys: ignore_invalid_keys,
+        ignore_invalid_keys:,
       )
     end
 
@@ -87,6 +89,9 @@ module Cask
       end
     end
 
+    # Get the explicit configuration.
+    #
+    # @api internal
     sig { returns(T::Hash[Symbol, T.any(String, Pathname, T::Array[String])]) }
     attr_accessor :explicit
 
@@ -183,6 +188,11 @@ module Cask
       self.class.new(explicit: other.explicit.merge(explicit))
     end
 
+    # Get explicit configuration as a string.
+    #
+    # @api internal
+    #
+    # TODO: This is only used by `homebrew/bundle`, so move it there.
     sig { returns(String) }
     def explicit_s
       explicit.map do |key, value|
@@ -198,9 +208,9 @@ module Cask
     sig { params(options: T.untyped).returns(String) }
     def to_json(*options)
       {
-        default:  default,
-        env:      env,
-        explicit: explicit,
+        default:,
+        env:,
+        explicit:,
       }.to_json(*options)
     end
   end

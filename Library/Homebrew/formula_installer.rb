@@ -22,13 +22,12 @@ require "utils/spdx"
 require "deprecate_disable"
 require "unlink"
 require "service"
+require "attestation"
 
 # Installer for a formula.
-#
-# @api private
 class FormulaInstaller
   include FormulaCellarChecks
-  extend Predicable
+  extend Attrable
 
   attr_reader :formula, :bottle_tab_runtime_dependencies
 
@@ -206,8 +205,10 @@ class FormulaInstaller
 
       case deprecate_disable_type
       when :deprecated
+        puts "::warning::#{message}" if ENV["GITHUB_ACTIONS"]
         opoo message
       when :disabled
+        puts "::error::#{message}" if ENV["GITHUB_ACTIONS"]
         raise CannotInstallFormulaError, message
       end
     end
@@ -215,7 +216,10 @@ class FormulaInstaller
     Tab.clear_cache
 
     verify_deps_exist unless ignore_deps?
+
     forbidden_license_check
+    forbidden_tap_check
+    forbidden_formula_check
 
     check_install_sanity
     install_fetch_deps unless ignore_deps?
@@ -419,8 +423,8 @@ class FormulaInstaller
     oh1 "Installing #{Formatter.identifier(formula.full_name)} #{options}".strip if show_header?
 
     if (tap = formula.tap) && tap.should_report_analytics?
-      Utils::Analytics.report_event(:formula_install, package_name: formula.name, tap_name: tap.name,
-on_request: installed_on_request?, options: options)
+      Utils::Analytics.report_package_event(:formula_install, package_name: formula.name, tap_name: tap.name,
+on_request: installed_on_request?, options:)
     end
 
     self.class.attempted << formula
@@ -467,7 +471,7 @@ on_request: installed_on_request?, options: options)
       Pathname(brew_prefix/"#{formula.name}.rb").atomic_write(s)
 
       keg = Keg.new(formula.prefix)
-      tab = Tab.for_keg(keg)
+      tab = keg.tab
       tab.installed_as_dependency = installed_as_dependency?
       tab.installed_on_request = installed_on_request?
       tab.write
@@ -566,7 +570,7 @@ on_request: installed_on_request?, options: options)
     unsatisfied_reqs = Hash.new { |h, k| h[k] = [] }
     formulae = [formula]
     formula_deps_map = formula.recursive_dependencies
-                              .index_by(&:name)
+                              .each_with_object({}) { |dep, h| h[dep.name] = dep }
 
     while (f = formulae.pop)
       runtime_requirements = runtime_requirements(f)
@@ -597,7 +601,7 @@ on_request: installed_on_request?, options: options)
   def expand_dependencies_for_formula(formula, inherited_options)
     # Cache for this expansion only. FormulaInstaller has a lot of inputs which can alter expansion.
     cache_key = "FormulaInstaller-#{formula.full_name}-#{Time.now.to_f}"
-    Dependency.expand(formula, cache_key: cache_key) do |dependent, dep|
+    Dependency.expand(formula, cache_key:) do |dependent, dep|
       inherited_options[dep.name] |= inherited_options_for(dep)
       build = effective_build_options_for(
         dependent,
@@ -664,7 +668,7 @@ on_request: installed_on_request?, options: options)
       puts "All dependencies for #{formula.full_name} are satisfied."
     elsif !deps.empty?
       oh1 "Installing dependencies for #{formula.full_name}: " \
-          "#{deps.map(&:first).map(&Formatter.method(:identifier)).to_sentence}",
+          "#{deps.map(&:first).map { Formatter.identifier(_1) }.to_sentence}",
           truncate: false
       deps.each { |dep, options| install_dependency(dep, options) }
     end
@@ -703,7 +707,7 @@ on_request: installed_on_request?, options: options)
 
     if df.linked_keg.directory?
       linked_keg = Keg.new(df.linked_keg.resolved_path)
-      tab = Tab.for_keg(linked_keg)
+      tab = linked_keg.tab
       keg_had_linked_keg = true
       keg_was_linked = linked_keg.linked?
       linked_keg.unlink
@@ -711,7 +715,7 @@ on_request: installed_on_request?, options: options)
 
     if df.latest_version_installed?
       installed_keg = Keg.new(df.prefix)
-      tab ||= Tab.for_keg(installed_keg)
+      tab ||= installed_keg.tab
       tmp_keg = Pathname.new("#{installed_keg}.tmp")
       installed_keg.rename(tmp_keg)
     end
@@ -732,7 +736,7 @@ on_request: installed_on_request?, options: options)
 
     fi = FormulaInstaller.new(
       df,
-      options:                    options,
+      options:,
       link_keg:                   keg_had_linked_keg ? keg_was_linked : nil,
       installed_as_dependency:    true,
       installed_on_request:       df.any_version_installed? && tab.present? && tab.installed_on_request,
@@ -818,7 +822,7 @@ on_request: installed_on_request?, options: options)
     end
 
     # Update tab with actual runtime dependencies
-    tab = Tab.for_keg(keg)
+    tab = keg.tab
     Tab.clear_cache
     f_runtime_deps = formula.runtime_dependencies(read_from_tab: false)
     tab.runtime_dependencies = Tab.runtime_deps_hash(formula, f_runtime_deps)
@@ -919,7 +923,7 @@ on_request: installed_on_request?, options: options)
       formula.specified_path,
     ].concat(build_argv)
 
-    Utils.safe_fork do
+    Utils.safe_fork do |error_pipe|
       if Sandbox.available?
         sandbox = Sandbox.new
         formula.logs.mkpath
@@ -931,6 +935,7 @@ on_request: installed_on_request?, options: options)
         sandbox.allow_fossil
         sandbox.allow_write_xcode
         sandbox.allow_write_cellar(formula)
+        sandbox.deny_all_network_except_pipe(error_pipe) unless formula.network_access_allowed?(:build)
         sandbox.exec(*args)
       else
         exec(*args)
@@ -1145,7 +1150,7 @@ on_request: installed_on_request?, options: options)
 
     args << post_install_formula_path
 
-    Utils.safe_fork do
+    Utils.safe_fork do |error_pipe|
       if Sandbox.available?
         sandbox = Sandbox.new
         formula.logs.mkpath
@@ -1155,6 +1160,7 @@ on_request: installed_on_request?, options: options)
         sandbox.allow_write_xcode
         sandbox.deny_write_homebrew_repository
         sandbox.allow_write_cellar(formula)
+        sandbox.deny_all_network_except_pipe(error_pipe) unless formula.network_access_allowed?(:postinstall)
         Keg::KEG_LINK_DIRECTORIES.each do |dir|
           sandbox.allow_write_path "#{HOMEBREW_PREFIX}/#{dir}"
         end
@@ -1184,7 +1190,7 @@ on_request: installed_on_request?, options: options)
     return if deps.empty?
 
     oh1 "Fetching dependencies for #{formula.full_name}: " \
-        "#{deps.map(&:first).map(&Formatter.method(:identifier)).to_sentence}",
+        "#{deps.map(&:first).map { Formatter.identifier(_1) }.to_sentence}",
         truncate: false
 
     deps.each { |(dep, _options)| fetch_dependency(dep) }
@@ -1207,8 +1213,8 @@ on_request: installed_on_request?, options: options)
     @fetch_bottle_tab ||= begin
       formula.fetch_bottle_tab
       @bottle_tab_runtime_dependencies = formula.bottle_tab_attributes
-                                                .fetch("runtime_dependencies", [])
-                                                .index_by { |dep| dep["full_name"] }
+                                                .fetch("runtime_dependencies", []).then { |deps| deps || [] }
+                                                .each_with_object({}) { |dep, h| h[dep["full_name"]] = dep }
                                                 .freeze
       true
     rescue DownloadError, ArgumentError
@@ -1251,6 +1257,25 @@ on_request: installed_on_request?, options: options)
 
   sig { void }
   def pour
+    if Homebrew::EnvConfig.verify_attestations? && formula.tap&.core_tap?
+      ohai "Verifying attestation for #{formula.name}"
+      begin
+        Homebrew::Attestation.check_core_attestation formula.bottle
+      rescue Homebrew::Attestation::InvalidAttestationError => e
+        raise CannotInstallFormulaError, <<~EOS
+          The bottle for #{formula.name} has an invalid build provenance attestation.
+
+          This may indicate that the bottle was not produced by the expected
+          tap, or was maliciously inserted into the expected tap's bottle
+          storage.
+
+          Additional context:
+
+          #{e}
+        EOS
+      end
+    end
+
     HOMEBREW_CELLAR.cd do
       downloader.stage
     end
@@ -1260,7 +1285,7 @@ on_request: installed_on_request?, options: options)
     tab = Utils::Bottles.load_tab(formula)
 
     # fill in missing/outdated parts of the tab
-    # keep in sync with Tab#to_bottle_json
+    # keep in sync with Tab#to_bottle_hash
     tab.used_options = []
     tab.unused_options = []
     tab.built_as_bottle = true
@@ -1280,7 +1305,7 @@ on_request: installed_on_request?, options: options)
 
     keg = Keg.new(formula.prefix)
     skip_linkage = formula.bottle_specification.skip_relocation?
-    keg.replace_placeholders_with_locations tab.changed_files, skip_linkage: skip_linkage
+    keg.replace_placeholders_with_locations(tab.changed_files, skip_linkage:)
 
     cellar = formula.bottle_specification.tag_to_cellar(Utils::Bottles.tag)
     return if [:any, :any_skip_relocation].include?(cellar)
@@ -1311,6 +1336,134 @@ on_request: installed_on_request?, options: options)
 
   def self.locked
     @locked ||= []
+  end
+
+  sig { void }
+  def forbidden_license_check
+    forbidden_licenses = Homebrew::EnvConfig.forbidden_licenses.to_s.dup
+    SPDX::ALLOWED_LICENSE_SYMBOLS.each do |s|
+      pattern = /#{s.to_s.tr("_", " ")}/i
+      forbidden_licenses.sub!(pattern, s.to_s)
+    end
+    forbidden_licenses = forbidden_licenses.split.to_h do |license|
+      [license, SPDX.license_version_info(license)]
+    end
+
+    return if forbidden_licenses.blank?
+
+    owner = Homebrew::EnvConfig.forbidden_owner
+    owner_contact = if (contact = Homebrew::EnvConfig.forbidden_owner_contact.presence)
+      "\n#{contact}"
+    end
+
+    unless ignore_deps?
+      compute_dependencies.each do |(dep, _options)|
+        dep_f = dep.to_formula
+        next unless SPDX.licenses_forbid_installation? dep_f.license, forbidden_licenses
+
+        raise CannotInstallFormulaError, <<~EOS
+          The installation of #{formula.name} has a dependency on #{dep.name} where all
+          its licenses were forbidden by #{owner} in `HOMEBREW_FORBIDDEN_LICENSES`:
+            #{SPDX.license_expression_to_string dep_f.license}.#{owner_contact}
+        EOS
+      end
+    end
+
+    return if only_deps?
+
+    return unless SPDX.licenses_forbid_installation? formula.license, forbidden_licenses
+
+    raise CannotInstallFormulaError, <<~EOS
+      #{formula.name}'s licenses are all forbidden by #{owner} in `HOMEBREW_FORBIDDEN_LICENSES`:
+        #{SPDX.license_expression_to_string formula.license}.#{owner_contact}
+    EOS
+  end
+
+  sig { void }
+  def forbidden_tap_check
+    forbidden_taps = Homebrew::EnvConfig.forbidden_taps
+    return if forbidden_taps.blank?
+
+    forbidden_taps_set = Set.new(forbidden_taps.split.filter_map do |tap|
+      Tap.fetch(tap)
+    rescue Tap::InvalidNameError
+      opoo "Invalid tap name in `HOMEBREW_FORBIDDEN_TAPS`: #{tap}"
+      nil
+    end)
+
+    owner = Homebrew::EnvConfig.forbidden_owner
+    owner_contact = if (contact = Homebrew::EnvConfig.forbidden_owner_contact.presence)
+      "\n#{contact}"
+    end
+
+    unless ignore_deps?
+      compute_dependencies.each do |(dep, _options)|
+        dep_tap = dep.tap
+        next if dep_tap.blank?
+        next unless forbidden_taps_set.include?(dep_tap)
+
+        raise CannotInstallFormulaError, <<~EOS
+          The installation of #{formula.name} has a dependency #{dep.name}
+          but the #{dep_tap} tap was forbidden by #{owner} in `HOMEBREW_FORBIDDEN_TAPS`.#{owner_contact}
+        EOS
+      end
+    end
+
+    return if only_deps?
+
+    formula_tap = formula.tap
+    return if formula_tap.blank?
+    return unless forbidden_taps_set.include?(formula_tap)
+
+    raise CannotInstallFormulaError, <<~EOS
+      The installation of #{formula.full_name} has the tap #{formula_tap}
+      which was forbidden by #{owner} in `HOMEBREW_FORBIDDEN_TAPS`.#{owner_contact}
+    EOS
+  end
+
+  sig { void }
+  def forbidden_formula_check
+    forbidden_formulae = Set.new(Homebrew::EnvConfig.forbidden_formulae.to_s.split)
+    return if forbidden_formulae.blank?
+
+    owner = Homebrew::EnvConfig.forbidden_owner
+    owner_contact = if (contact = Homebrew::EnvConfig.forbidden_owner_contact.presence)
+      "\n#{contact}"
+    end
+
+    unless ignore_deps?
+      compute_dependencies.each do |(dep, _options)|
+        dep_name = if forbidden_formulae.include?(dep.name)
+          dep.name
+        elsif dep.tap.present? &&
+              (dep_full_name = "#{dep.tap}/#{dep.name}") &&
+              forbidden_formulae.include?(dep_full_name)
+          dep_full_name
+        else
+          next
+        end
+
+        raise CannotInstallFormulaError, <<~EOS
+          The installation of #{formula.name} has a dependency #{dep_name}
+          but the #{dep_name} formula was forbidden by #{owner} in `HOMEBREW_FORBIDDEN_FORMULAE`.#{owner_contact}
+        EOS
+      end
+    end
+
+    return if only_deps?
+
+    formula_name = if forbidden_formulae.include?(formula.name)
+      formula.name
+    elsif forbidden_formulae.include?(formula.full_name)
+      formula.full_name
+    else
+      return
+    end
+
+    raise CannotInstallFormulaError, <<~EOS
+      The installation of #{formula_name} was forbidden by #{owner}
+      in `HOMEBREW_FORBIDDEN_FORMULAE`.#{owner_contact}
+    EOS
   end
 
   private
@@ -1346,40 +1499,5 @@ on_request: installed_on_request?, options: options)
     return if @requirement_messages.empty?
 
     $stderr.puts @requirement_messages
-  end
-
-  sig { void }
-  def forbidden_license_check
-    forbidden_licenses = Homebrew::EnvConfig.forbidden_licenses.to_s.dup
-    SPDX::ALLOWED_LICENSE_SYMBOLS.each do |s|
-      pattern = /#{s.to_s.tr("_", " ")}/i
-      forbidden_licenses.sub!(pattern, s.to_s)
-    end
-    forbidden_licenses = forbidden_licenses.split.to_h do |license|
-      [license, SPDX.license_version_info(license)]
-    end
-
-    return if forbidden_licenses.blank?
-    return if ignore_deps?
-
-    compute_dependencies.each do |(dep, _options)|
-      dep_f = dep.to_formula
-      next unless SPDX.licenses_forbid_installation? dep_f.license, forbidden_licenses
-
-      raise CannotInstallFormulaError, <<~EOS
-        The installation of #{formula.name} has a dependency on #{dep.name} where all
-        its licenses are forbidden by HOMEBREW_FORBIDDEN_LICENSES:
-          #{SPDX.license_expression_to_string dep_f.license}.
-      EOS
-    end
-
-    return if only_deps?
-
-    return unless SPDX.licenses_forbid_installation? formula.license, forbidden_licenses
-
-    raise CannotInstallFormulaError, <<~EOS
-      #{formula.name}'s licenses are all forbidden by HOMEBREW_FORBIDDEN_LICENSES:
-        #{SPDX.license_expression_to_string formula.license}.
-    EOS
   end
 end

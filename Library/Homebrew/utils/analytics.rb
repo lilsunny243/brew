@@ -8,45 +8,40 @@ require "api"
 
 module Utils
   # Helper module for fetching and reporting analytics data.
-  #
-  # @api private
   module Analytics
     INFLUX_BUCKET = "analytics"
     INFLUX_TOKEN = "iVdsgJ_OjvTYGAA79gOfWlA_fX0QCuj4eYUNdb-qVUTrC3tp3JTWCADVNE9HxV0kp2ZjIK9tuthy_teX4szr9A=="
     INFLUX_HOST = "https://eu-central-1-1.aws.cloud2.influxdata.com"
     INFLUX_ORG = "d81a3e6d582d485f"
 
+    extend Cachable
+
     class << self
       include Context
 
       sig {
-        params(measurement: Symbol, package_name: String, tap_name: String, on_request: T::Boolean,
-               options: String).void
+        params(measurement: Symbol,
+               tags:        T::Hash[Symbol, T.any(T::Boolean, String)],
+               fields:      T::Hash[Symbol, T.any(T::Boolean, String)]).void
       }
-      def report_influx(measurement, package_name:, tap_name:, on_request:, options:)
-        # ensure on_request is a boolean
-        on_request = on_request ? true : false
-
-        # ensure options are removed (by `.compact` below) if empty
-        options = nil if options.blank?
+      def report_influx(measurement, tags, fields)
+        return if not_this_run? || disabled?
 
         # Tags are always implicitly strings and must have low cardinality.
-        tags = default_tags_influx.merge(on_request: on_request)
-                                  .map { |k, v| "#{k}=#{v}" }
-                                  .join(",")
+        tags_string = tags.map { |k, v| "#{k}=#{v}" }
+                          .join(",")
 
         # Fields need explicitly wrapped with quotes and can have high cardinality.
-        fields = default_fields_influx.merge(package: package_name, tap_name: tap_name, options: options)
-                                      .compact
-                                      .map { |k, v| %Q(#{k}="#{v}") }
-                                      .join(",")
+        fields_string = fields.compact
+                              .map { |k, v| %Q(#{k}="#{v}") }
+                              .join(",")
 
         args = [
           "--max-time", "3",
           "--header", "Authorization: Token #{INFLUX_TOKEN}",
           "--header", "Content-Type: text/plain; charset=utf-8",
           "--header", "Accept: application/json",
-          "--data-binary", "#{measurement},#{tags} #{fields} #{Time.now.to_i}"
+          "--data-binary", "#{measurement},#{tags_string} #{fields_string} #{Time.now.to_i}"
         ]
 
         # Second precision is highest we can do and has the lowest performance cost.
@@ -72,29 +67,27 @@ module Utils
         params(measurement: Symbol, package_name: String, tap_name: String,
                on_request: T::Boolean, options: String).void
       }
-      def report_event(measurement, package_name:, tap_name:, on_request:, options: "")
-        report_influx_event(measurement, package_name: package_name, tap_name: tap_name, on_request: on_request,
-options: options)
-      end
-
-      sig {
-        params(measurement: Symbol, package_name: String, tap_name: String, on_request: T::Boolean,
-               options: String).void
-      }
-      def report_influx_event(measurement, package_name:, tap_name:, on_request: false, options: "")
+      def report_package_event(measurement, package_name:, tap_name:, on_request: false, options: "")
         return if not_this_run? || disabled?
 
-        report_influx(measurement, package_name: package_name, tap_name: tap_name, on_request: on_request,
-options: options)
+        # ensure on_request is a boolean
+        on_request = on_request ? true : false
+
+        # ensure options are removed (by `.compact` below) if empty
+        options = nil if options.blank?
+
+        # Tags must have low cardinality.
+        tags = default_package_tags.merge(on_request:)
+
+        # Fields can have high cardinality.
+        fields = default_package_fields.merge(package: package_name, tap_name:, options:)
+                                       .compact
+
+        report_influx(measurement, tags, fields)
       end
 
       sig { params(exception: BuildError).void }
       def report_build_error(exception)
-        report_influx_error(exception)
-      end
-
-      sig { params(exception: BuildError).void }
-      def report_influx_error(exception)
         return if not_this_run? || disabled?
 
         formula = exception.formula
@@ -104,8 +97,63 @@ options: options)
         return unless tap
         return unless tap.should_report_analytics?
 
-        options = exception.options.to_a.map(&:to_s).join(" ")
-        report_influx_event(:build_error, package_name: formula.name, tap_name: tap.name, options: options)
+        options = exception.options.to_a.compact.map(&:to_s).sort.uniq.join(" ")
+        report_package_event(:build_error, package_name: formula.name, tap_name: tap.name, options:)
+      end
+
+      sig { params(command_instance: Homebrew::AbstractCommand).void }
+      def report_command_run(command_instance)
+        return if not_this_run? || disabled?
+
+        command = command_instance.class.command_name
+
+        options_array = command_instance.args.options_only.to_a.compact
+
+        # Strip out any flag values to reduce cardinality and preserve privacy.
+        options_array.map! { |option| option.sub(/=.*/, "=") }
+        options = options_array.sort.uniq.join(" ")
+
+        # Tags must have low cardinality.
+        tags = {
+          command:,
+          ci:        ENV["CI"].present?,
+          devcmdrun: config_true?(:devcmdrun),
+          developer: Homebrew::EnvConfig.developer?,
+        }
+
+        # Fields can have high cardinality.
+        fields = { options: }
+
+        report_influx(:command_run, tags, fields)
+      end
+
+      sig { params(step_command_short: String, passed: T::Boolean).void }
+      def report_test_bot_test(step_command_short, passed)
+        return if not_this_run? || disabled?
+        return if ENV["HOMEBREW_TEST_BOT_ANALYTICS"].blank?
+
+        # ensure passed is a boolean
+        passed = passed ? true : false
+
+        # Tags must have low cardinality.
+        tags = {
+          passed:,
+          arch:   HOMEBREW_PHYSICAL_PROCESSOR,
+          os:     HOMEBREW_SYSTEM,
+        }
+
+        # Strip out any flag values to reduce cardinality and preserve privacy.
+        # Sort options to ensure consistent ordering and improve readability.
+        command_and_package, options =
+          step_command_short.split
+                            .map { |arg| arg.sub(/=.*/, "=") }
+                            .partition { |arg| !arg.start_with?("-") }
+        command = (command_and_package + options.sort).join(" ")
+
+        # Fields can have high cardinality.
+        fields = { command: }
+
+        report_influx(:test_bot_test, tags, fields)
       end
 
       def influx_message_displayed?
@@ -186,7 +234,7 @@ options: options)
           return
         end
 
-        table_output(category, days, results, os_version: os_version, cask_install: cask_install)
+        table_output(category, days, results, os_version:, cask_install:)
       end
 
       def output_analytics(json, args:)
@@ -265,8 +313,8 @@ options: options)
         json = Homebrew::API::Formula.fetch formula.name
         return if json.blank? || json["analytics"].blank?
 
-        output_analytics(json, args: args)
-        output_github_packages_downloads(formula, args: args)
+        output_analytics(json, args:)
+        output_github_packages_downloads(formula, args:)
       rescue ArgumentError
         # Ignore failed API requests
         nil
@@ -278,27 +326,22 @@ options: options)
         json = Homebrew::API::Cask.fetch cask.token
         return if json.blank? || json["analytics"].blank?
 
-        output_analytics(json, args: args)
+        output_analytics(json, args:)
       rescue ArgumentError
         # Ignore failed API requests
         nil
       end
 
-      def clear_cache
-        remove_instance_variable(:@default_tags_influx) if instance_variable_defined?(:@default_tags_influx)
-        remove_instance_variable(:@default_fields_influx) if instance_variable_defined?(:@default_fields_influx)
-      end
-
       sig { returns(T::Hash[Symbol, String]) }
-      def default_tags_influx
-        @default_tags_influx ||= begin
+      def default_package_tags
+        cache[:default_package_tags] ||= begin
           # Only display default prefixes to reduce cardinality and improve privacy
           prefix = Homebrew.default_prefix? ? HOMEBREW_PREFIX.to_s : "custom-prefix"
 
           # Tags are always strings and must have low cardinality.
           {
             ci:             ENV["CI"].present?,
-            prefix:         prefix,
+            prefix:,
             default_prefix: Homebrew.default_prefix?,
             developer:      Homebrew::EnvConfig.developer?,
             devcmdrun:      config_true?(:devcmdrun),
@@ -311,8 +354,8 @@ options: options)
       # remove os_version starting with " or number
       # remove macOS patch release
       sig { returns(T::Hash[Symbol, String]) }
-      def default_fields_influx
-        @default_fields_influx ||= begin
+      def default_package_fields
+        cache[:default_package_fields] ||= begin
           version = if (match_data = HOMEBREW_VERSION.match(/^[\d.]+/))
             suffix = "-dev" if HOMEBREW_VERSION.include?("-")
             match_data[0] + suffix.to_s
@@ -326,8 +369,8 @@ options: options)
           end
 
           {
-            version:             version,
-            os_name_and_version: os_name_and_version,
+            version:,
+            os_name_and_version:,
           }
         end
       end
@@ -428,7 +471,7 @@ options: options)
       end
 
       def format_percent(percent)
-        format("%<percent>.2f", percent: percent)
+        format("%<percent>.2f", percent:)
       end
     end
   end

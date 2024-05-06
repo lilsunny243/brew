@@ -41,11 +41,11 @@ module Homebrew
           ^https?://github\.com
           /(?:downloads/)?(?<username>[^/]+) # The GitHub username
           /(?<repository>[^/]+)              # The GitHub repository name
-        }ix.freeze
+        }ix
 
         # The default regex used to identify a version from a tag when a regex
         # isn't provided.
-        DEFAULT_REGEX = /v?(\d+(?:\.\d+)+)/i.freeze
+        DEFAULT_REGEX = /v?(\d+(?:\.\d+)+)/i
 
         # Keys in the release JSON that could contain the version.
         # The tag name is checked first, to better align with the {Git}
@@ -105,7 +105,7 @@ module Homebrew
           end
 
           content = [content] unless content.is_a?(Array)
-          content.reject(&:blank?).map do |release|
+          content.compact_blank.filter_map do |release|
             next if release["draft"] || release["prerelease"]
 
             value = T.let(nil, T.untyped)
@@ -116,7 +116,7 @@ module Homebrew
               value = match[1]
             end
             value
-          end.compact.uniq
+          end.uniq
         end
 
         # Generates the GitHub API URL for the repository's recent releases
@@ -129,12 +129,12 @@ module Homebrew
           params(
             url:     String,
             regex:   Regexp,
-            _unused: T.nilable(T::Hash[Symbol, T.untyped]),
+            _unused: T.untyped,
             block:   T.nilable(Proc),
           ).returns(T::Hash[Symbol, T.untyped])
         }
         def self.find_versions(url:, regex: DEFAULT_REGEX, **_unused, &block)
-          match_data = { matches: {}, regex: regex, url: url }
+          match_data = { matches: {}, regex:, url: }
 
           generated = generate_input_values(url)
           return match_data if generated.blank?

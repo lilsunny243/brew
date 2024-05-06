@@ -2,7 +2,7 @@
 
 require "hardware"
 
-describe Hardware::CPU do
+RSpec.describe Hardware::CPU do
   describe "::type" do
     let(:cpu_types) do
       [
@@ -28,11 +28,13 @@ describe Hardware::CPU do
         :amd_k12,
         :arm,
         :arm_blizzard_avalanche,
-        :arm_everest_sawtooth,
         :arm_firestorm_icestorm,
         :arm_hurricane_zephyr,
+        :arm_ibiza,
         :arm_lightning_thunder,
+        :arm_lobos,
         :arm_monsoon_mistral,
+        :arm_palma,
         :arm_twister,
         :arm_typhoon,
         :arm_vortex_tempest,

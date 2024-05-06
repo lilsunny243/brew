@@ -1,34 +1,40 @@
 # typed: true
 # frozen_string_literal: true
 
+require "attrable"
 require "open3"
 require "plist"
 require "shellwords"
 
+require "context"
 require "extend/io"
-require "extend/predicable"
-
-require "extend/time"
+require "utils/timer"
 
 # Class for running sub-processes and capturing their output and exit status.
 #
-# @api private
+# @api internal
 class SystemCommand
-  using TimeRemaining
-
   # Helper functions for calling {SystemCommand.run}.
+  #
+  # @api internal
   module Mixin
+    # Run a fallible system command.
+    #
+    # @api internal
     def system_command(executable, **options)
       SystemCommand.run(executable, **options)
     end
 
+    # Run an infallible system command.
+    #
+    # @api internal
     def system_command!(command, **options)
       SystemCommand.run!(command, **options)
     end
   end
 
   include Context
-  extend Predicable
+  extend Attrable
 
   def self.run(executable, **options)
     new(executable, **options).run!
@@ -190,9 +196,8 @@ class SystemCommand
                      *askpass_flags,
                      "-E", *env_args,
                      "--", "/usr/bin/sudo"]
-    elsif sudo_as_root?
-      user_flags += ["-u", "root"]
     end
+    user_flags += ["-u", "root"] if sudo_as_root?
     ["/usr/bin/sudo", *user_flags, *askpass_flags, "-E", *env_args, "--"]
   end
 
@@ -261,7 +266,7 @@ class SystemCommand
     end
 
     end_time = Time.now + @timeout if @timeout
-    raise Timeout::Error if raw_wait_thr.join(end_time&.remaining).nil?
+    raise Timeout::Error if raw_wait_thr.join(Utils::Timer.remaining(end_time)).nil?
 
     @status = raw_wait_thr.value
 
@@ -279,7 +284,7 @@ class SystemCommand
 
   sig { params(raw_stdin: IO).void }
   def write_input_to(raw_stdin)
-    input.each(&raw_stdin.method(:write))
+    input.each { raw_stdin.write(_1) }
   end
 
   sig { params(sources: T::Array[IO], _block: T.proc.params(type: Symbol, line: String).void).void }
@@ -409,7 +414,3 @@ class SystemCommand
     private :warn_plist_garbage
   end
 end
-
-# Make `system_command` available everywhere.
-# FIXME: Include this explicitly only where it is needed.
-include SystemCommand::Mixin # rubocop:disable Style/MixinUsage

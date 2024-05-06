@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 require "cmd/shared_examples/args_parse"
+require "dev-cmd/extract"
 
-describe "brew extract" do
+RSpec.describe Homebrew::DevCmd::Extract do
   it_behaves_like "parseable arguments"
 
   context "when extracting a formula" do
@@ -10,7 +11,7 @@ describe "brew extract" do
       path = Tap::TAP_DIRECTORY/"homebrew/homebrew-foo"
       (path/"Formula").mkpath
       target = Tap.from_path(path)
-      core_tap = CoreTap.new
+      core_tap = CoreTap.instance
       core_tap.path.cd do
         system "git", "init"
         # Start with deprecated bottle syntax
@@ -30,7 +31,7 @@ describe "brew extract" do
         system "git", "add", "--all"
         system "git", "commit", "-m", "testball 0.2"
       end
-      { name: target.name, path: path }
+      { name: target.name, path: }
     end
 
     it "retrieves the most recent version of formula", :integration_test do

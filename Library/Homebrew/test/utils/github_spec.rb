@@ -2,7 +2,7 @@
 
 require "utils/github"
 
-describe GitHub do
+RSpec.describe GitHub do
   describe "::search_query_string" do
     it "builds a query with the given hash parameters formatted as key:value" do
       query = described_class.search_query_string(user: "Homebrew", repo: "brew")
@@ -25,9 +25,10 @@ describe GitHub do
       results = described_class.search_issues("brew search",
                                               repo:   "Homebrew/legacy-homebrew",
                                               author: "MikeMcQuaid",
-                                              is:     "closed")
+                                              is:     "issue",
+                                              no:     "milestone")
       expect(results).not_to be_empty
-      expect(results.first["title"]).to eq("Shall we run `brew update` automatically?")
+      expect(results.first["title"]).to eq("Shall we move more things to taps?")
     end
   end
 
@@ -45,10 +46,10 @@ describe GitHub do
     end
   end
 
-  describe "::get_artifact_url", :needs_network do
+  describe "::get_artifact_urls", :needs_network do
     it "fails to find a nonexistent workflow" do
       expect do
-        described_class.get_artifact_url(
+        described_class.get_artifact_urls(
           described_class.get_workflow_run("Homebrew", "homebrew-core", "1"),
         )
       end.to raise_error(/No matching check suite found/)
@@ -56,19 +57,27 @@ describe GitHub do
 
     it "fails to find artifacts that don't exist" do
       expect do
-        described_class.get_artifact_url(
+        described_class.get_artifact_urls(
           described_class.get_workflow_run("Homebrew", "homebrew-core", "135608",
-                                           workflow_id: "triage.yml", artifact_name: "false_artifact"),
+                                           workflow_id: "triage.yml", artifact_pattern: "false_artifact"),
         )
-      end.to raise_error(/No artifact .+ was found/)
+      end.to raise_error(/No artifacts with the pattern .+ were found/)
     end
 
-    it "gets an artifact link" do
-      url = described_class.get_artifact_url(
+    it "gets artifact URLs" do
+      urls = described_class.get_artifact_urls(
         described_class.get_workflow_run("Homebrew", "homebrew-core", "135608",
-                                         workflow_id: "triage.yml", artifact_name: "event_payload"),
+                                         workflow_id: "triage.yml", artifact_pattern: "event_payload"),
       )
-      expect(url).to eq("https://api.github.com/repos/Homebrew/homebrew-core/actions/artifacts/781984175/zip")
+      expect(urls).to eq(["https://api.github.com/repos/Homebrew/homebrew-core/actions/artifacts/781984175/zip"])
+    end
+
+    it "supports pattern matching" do
+      urls = described_class.get_artifact_urls(
+        described_class.get_workflow_run("Homebrew", "brew", "17068",
+                                         workflow_id: "pkg-installer.yml", artifact_pattern: "Homebrew-*.pkg"),
+      )
+      expect(urls).to eq(["https://api.github.com/repos/Homebrew/brew/actions/artifacts/1405050842/zip"])
     end
   end
 

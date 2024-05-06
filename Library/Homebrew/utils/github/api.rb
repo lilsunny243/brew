@@ -1,11 +1,11 @@
 # typed: true
 # frozen_string_literal: true
 
+require "system_command"
 require "tempfile"
 require "utils/shell"
 require "utils/formatter"
 
-# A module that interfaces with GitHub, code like PAT scopes, credential handling and API errors.
 module GitHub
   def self.pat_blurb(scopes = ALL_SCOPES)
     <<~EOS
@@ -19,19 +19,26 @@ module GitHub
 
   API_URL = "https://api.github.com"
   API_MAX_PAGES = 50
+  private_constant :API_MAX_PAGES
   API_MAX_ITEMS = 5000
+  private_constant :API_MAX_ITEMS
   PAGINATE_RETRY_COUNT = 3
+  private_constant :PAGINATE_RETRY_COUNT
 
   CREATE_GIST_SCOPES = ["gist"].freeze
   CREATE_ISSUE_FORK_OR_PR_SCOPES = ["repo"].freeze
   CREATE_WORKFLOW_SCOPES = ["workflow"].freeze
   ALL_SCOPES = (CREATE_GIST_SCOPES + CREATE_ISSUE_FORK_OR_PR_SCOPES + CREATE_WORKFLOW_SCOPES).freeze
-  GITHUB_PERSONAL_ACCESS_TOKEN_REGEX = /^(?:[a-f0-9]{40}|gh[po]_\w{36,251})$/.freeze
+  private_constant :ALL_SCOPES
+  GITHUB_PERSONAL_ACCESS_TOKEN_REGEX = /^(?:[a-f0-9]{40}|(?:gh[pousr]|github_pat)_\w{36,251})$/
+  private_constant :GITHUB_PERSONAL_ACCESS_TOKEN_REGEX
 
-  # Helper functions to access the GitHub API.
+  # Helper functions for accessing the GitHub API.
   #
-  # @api private
+  # @api internal
   module API
+    extend SystemCommand::Mixin
+
     # Generic API error.
     class Error < RuntimeError
       attr_reader :github_message
@@ -135,7 +142,7 @@ module GitHub
       env = { "PATH" => PATH.new(HOMEBREW_PREFIX/"opt/gh/bin", ENV.fetch("PATH")) }
       gh_out, _, result = system_command "gh",
                                          args:         ["auth", "token", "--hostname", "github.com"],
-                                         env:          env,
+                                         env:,
                                          print_stderr: false
       return unless result.success?
 
@@ -197,6 +204,7 @@ module GitHub
       credentials_scopes = response_headers["x-oauth-scopes"]
       return if needed_scopes.subset?(Set.new(credentials_scopes.to_s.split(", ")))
 
+      github_permission_link = GitHub.pat_blurb(needed_scopes.to_a)
       needed_scopes = needed_scopes.to_a.join(", ").presence || "none"
       credentials_scopes = "none" if credentials_scopes.blank?
 
@@ -205,7 +213,7 @@ module GitHub
         Your #{what} credentials do not have sufficient scope!
         Scopes required: #{needed_scopes}
         Scopes present:  #{credentials_scopes}
-        #{GitHub.pat_blurb}
+        #{github_permission_link}
       EOS
     end
 
@@ -280,11 +288,11 @@ module GitHub
       end
     end
 
-    def self.paginate_rest(url, additional_query_params: nil, per_page: 100)
+    def self.paginate_rest(url, additional_query_params: nil, per_page: 100, scopes: [].freeze)
       (1..API_MAX_PAGES).each do |page|
         retry_count = 1
         result = begin
-          API.open_rest("#{url}?per_page=#{per_page}&page=#{page}&#{additional_query_params}")
+          API.open_rest("#{url}?per_page=#{per_page}&page=#{page}&#{additional_query_params}", scopes:)
         rescue Error
           if retry_count < PAGINATE_RETRY_COUNT
             retry_count += 1
@@ -300,8 +308,8 @@ module GitHub
     end
 
     def self.open_graphql(query, variables: nil, scopes: [].freeze, raise_errors: true)
-      data = { query: query, variables: variables }
-      result = open_rest("#{API_URL}/graphql", scopes: scopes, data: data, request_method: "POST")
+      data = { query:, variables: }
+      result = open_rest("#{API_URL}/graphql", scopes:, data:, request_method: "POST")
 
       if raise_errors
         if result["errors"].present?
@@ -311,6 +319,28 @@ module GitHub
         result["data"]
       else
         result
+      end
+    end
+
+    sig {
+      params(
+        query:     String,
+        variables: T.nilable(T::Hash[Symbol, T.untyped]),
+        _block:    T.proc.params(data: T::Hash[String, T.untyped]).returns(T::Hash[String, T.untyped]),
+      ).void
+    }
+    def self.paginate_graphql(query, variables: nil, &_block)
+      result = API.open_graphql(query, variables:)
+
+      has_next_page = T.let(true, T::Boolean)
+      variables ||= {}
+      while has_next_page
+        page_info = yield result
+        has_next_page = page_info["hasNextPage"]
+        if has_next_page
+          variables[:after] = page_info["endCursor"]
+          result = API.open_graphql(query, variables:)
+        end
       end
     end
 

@@ -2,12 +2,11 @@
 # frozen_string_literal: true
 
 require "delegate"
+require "extend/hash/keys"
 
 module Cask
   class DSL
     # Class corresponding to the `conflicts_with` stanza.
-    #
-    # @api private
     class ConflictsWith < SimpleDelegator
       VALID_KEYS = [
         :formula,

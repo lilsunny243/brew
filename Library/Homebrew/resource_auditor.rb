@@ -3,8 +3,6 @@
 
 module Homebrew
   # Auditor for checking common violations in {Resource}s.
-  #
-  # @api private
   class ResourceAuditor
     include Utils::Curl
 
@@ -143,7 +141,7 @@ module Homebrew
           if (http_content_problem = curl_check_http_content(
             url,
             "source URL",
-            specs:             specs,
+            specs:,
             use_homebrew_curl: @use_homebrew_curl,
           ))
             problem http_content_problem
@@ -171,6 +169,7 @@ module Homebrew
       return if spec_name != :head
       return unless Utils::Git.remote_exists?(url)
       return if specs[:tag].present?
+      return if specs[:revision].present?
 
       branch = Utils.popen_read("git", "ls-remote", "--symref", url, "HEAD")
                     .match(%r{ref: refs/heads/(.*?)\s+HEAD})&.to_a&.second

@@ -6,8 +6,6 @@ require "rubocops/shared/helper_functions"
 module RuboCop
   module Cop
     # Abstract base class for all formula cops.
-    #
-    # @api private
     class FormulaCop < Base
       extend T::Helpers
       include RangeHelp
@@ -22,7 +20,7 @@ module RuboCop
 
       # This method is called by RuboCop and is the main entry point.
       def on_class(node)
-        @file_path = processed_source.buffer.name
+        @file_path = processed_source.file_path
         return unless file_path_allowed?
         return unless formula_class?(node)
 
@@ -230,10 +228,9 @@ module RuboCop
       end
 
       def file_path_allowed?
-        paths_to_exclude = [%r{/Library/Homebrew/test/}]
         return true if @file_path.nil? # file_path is nil when source is directly passed to the cop, e.g. in specs
 
-        @file_path !~ Regexp.union(paths_to_exclude)
+        !@file_path.include?("/Library/Homebrew/test/")
       end
 
       def on_system_methods

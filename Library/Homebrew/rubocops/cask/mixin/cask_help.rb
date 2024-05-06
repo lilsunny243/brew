@@ -6,20 +6,13 @@ module RuboCop
     module Cask
       # Common functionality for cops checking casks.
       module CaskHelp
-        prepend CommentsHelp
+        prepend CommentsHelp # Update the rbi file if changing this: https://github.com/sorbet/sorbet/issues/259
 
         sig { overridable.params(cask_block: RuboCop::Cask::AST::CaskBlock).void }
         def on_cask(cask_block); end
 
         sig { overridable.params(cask_stanza_block: RuboCop::Cask::AST::StanzaBlock).void }
         def on_cask_stanza_block(cask_stanza_block); end
-
-        # FIXME: Workaround until https://github.com/rubocop/rubocop/pull/11858 is released.
-        def find_end_line(node)
-          return node.loc.end.line if node.block_type? || node.numblock_type?
-
-          super
-        end
 
         sig { params(block_node: RuboCop::AST::BlockNode).void }
         def on_block(block_node)

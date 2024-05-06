@@ -13,10 +13,30 @@ class Tab
 
   FILENAME = "INSTALL_RECEIPT.json"
 
-  attr_accessor :homebrew_version, :tabfile, :built_as_bottle, :installed_as_dependency, :installed_on_request,
-                :changed_files, :poured_from_bottle, :loaded_from_api, :time, :stdlib, :aliases, :arch, :source,
+  # Check whether the formula was installed as a dependency.
+  #
+  # @api internal
+  attr_accessor :installed_as_dependency
+
+  # Check whether the formula was installed on request.
+  #
+  # @api internal
+  attr_accessor :installed_on_request
+
+  # Check whether the formula was poured from a bottle.
+  #
+  # @api internal
+  attr_accessor :poured_from_bottle
+
+  attr_accessor :homebrew_version, :tabfile, :built_as_bottle,
+                :changed_files, :loaded_from_api, :time, :stdlib, :aliases, :arch, :source,
                 :built_on
-  attr_writer :used_options, :unused_options, :compiler, :runtime_dependencies, :source_modified_time
+  attr_writer :used_options, :unused_options, :compiler, :source_modified_time
+
+  # Returns the formula's runtime dependencies.
+  #
+  # @api internal
+  attr_writer :runtime_dependencies
 
   # Instantiates a {Tab} for a new installation of a formula.
   def self.create(formula, compiler, stdlib)
@@ -60,7 +80,8 @@ class Tab
   end
 
   # Returns the {Tab} for an install receipt at `path`.
-  # Results are cached.
+  #
+  # NOTE: Results are cached.
   def self.from_file(path)
     cache.fetch(path) do |p|
       content = File.read(p)
@@ -92,7 +113,7 @@ class Tab
     end
 
     if attributes["source"]["spec"].nil?
-      version = PkgVersion.parse path.to_s.split("/").second_to_last
+      version = PkgVersion.parse(File.basename(File.dirname(path)))
       attributes["source"]["spec"] = if version.head?
         "head"
       else
@@ -116,6 +137,11 @@ class Tab
     new(attributes)
   end
 
+  # Get the {Tab} for the given {Keg},
+  # or a fake one if the formula is not installed.
+  #
+  # @api internal
+  sig { params(keg: T.any(Keg, Pathname)).returns(T.attached_class) }
   def self.for_keg(keg)
     path = keg/FILENAME
 
@@ -265,6 +291,10 @@ class Tab
     spec == :stable
   end
 
+  # The options used to install the formula.
+  #
+  # @api internal
+  sig { returns(Options) }
   def used_options
     Options.create(@used_options)
   end
@@ -303,6 +333,7 @@ class Tab
     built_as_bottle
   end
 
+  sig { returns(T.nilable(Tap)) }
   def tap
     tap_name = source["tap"]
     Tap.fetch(tap_name) if tap_name
@@ -322,11 +353,11 @@ class Tab
   end
 
   def stable_version
-    versions["stable"]&.then(&Version.method(:new))
+    versions["stable"]&.then { Version.new(_1) }
   end
 
   def head_version
-    versions["head"]&.then(&Version.method(:new))
+    versions["head"]&.then { Version.new(_1) }
   end
 
   def version_scheme

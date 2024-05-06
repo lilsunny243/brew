@@ -1,6 +1,7 @@
 # typed: true
 # frozen_string_literal: true
 
+require "attrable"
 require "resource"
 require "download_strategy"
 require "checksum"
@@ -45,7 +46,6 @@ class SoftwareSpec
     @deprecated_options = []
     @build = BuildOptions.new(Options.create(@flags), options)
     @compiler_failures = []
-    @uses_from_macos_elements = []
   end
 
   def initialize_dup(other)
@@ -61,7 +61,6 @@ class SoftwareSpec
     @deprecated_options = @deprecated_options.dup
     @build = @build.dup
     @compiler_failures = @compiler_failures.dup
-    @uses_from_macos_elements = @uses_from_macos_elements.dup
   end
 
   def freeze
@@ -76,7 +75,6 @@ class SoftwareSpec
     @deprecated_options.freeze
     @build.freeze
     @compiler_failures.freeze
-    @uses_from_macos_elements.freeze
     super
   end
 
@@ -140,6 +138,7 @@ class SoftwareSpec
   end
 
   def go_resource(name, &block)
+    # odeprecated "`SoftwareSpec#go_resource`", "Go modules"
     resource name, Resource::Go, &block
   end
 
@@ -188,33 +187,24 @@ class SoftwareSpec
     add_dep_option(dep) if dep
   end
 
-  def uses_from_macos(deps, bounds = {})
-    if deps.is_a?(Hash)
-      bounds = deps.dup
-      deps = [bounds.shift].to_h
+  sig {
+    params(
+      dep:    T.any(String, T::Hash[T.any(String, Symbol), T.any(Symbol, T::Array[Symbol])]),
+      bounds: T::Hash[Symbol, Symbol],
+    ).void
+  }
+  def uses_from_macos(dep, bounds = {})
+    if dep.is_a?(Hash)
+      bounds = dep.dup
+      dep, tags = bounds.shift
+      dep = T.cast(dep, String)
+      tags = [*tags]
+      bounds = T.cast(bounds, T::Hash[Symbol, Symbol])
+    else
+      tags = []
     end
 
-    spec, tags = deps.is_a?(Hash) ? deps.first : deps
-    raise TypeError, "Dependency name must be a string!" unless spec.is_a?(String)
-
-    @uses_from_macos_elements << deps
-
-    depends_on UsesFromMacOSDependency.new(spec, Array(tags), bounds: bounds)
-  end
-
-  # @deprecated
-  def uses_from_macos_elements
-    # TODO: remove all @uses_from_macos_elements when removing this method
-    # Also remember to remove the delegate from formula.rb
-    odisabled "#uses_from_macos_elements", "#declared_deps"
-    @uses_from_macos_elements
-  end
-
-  # @deprecated
-  def uses_from_macos_names
-    # TODO: Remember to remove the delegate from formula.rb
-    odisabled "#uses_from_macos_names", "#declared_deps"
-    uses_from_macos_elements.flat_map { |e| e.is_a?(Hash) ? e.keys : e }
+    depends_on UsesFromMacOSDependency.new(dep, tags, bounds:)
   end
 
   def deps
@@ -227,13 +217,13 @@ class SoftwareSpec
 
   def recursive_dependencies
     deps_f = []
-    recursive_dependencies = deps.map do |dep|
+    recursive_dependencies = deps.filter_map do |dep|
       deps_f << dep.to_formula
       dep
     rescue TapFormulaUnavailableError
       # Don't complain about missing cross-tap dependencies
       next
-    end.compact.uniq
+    end.uniq
     deps_f.compact.each do |f|
       f.recursive_dependencies.each do |dep|
         recursive_dependencies << dep unless recursive_dependencies.include?(dep)
@@ -294,22 +284,30 @@ class Bottle
   class Filename
     attr_reader :name, :version, :tag, :rebuild
 
+    sig { params(formula: Formula, tag: Utils::Bottles::Tag, rebuild: Integer).returns(T.attached_class) }
     def self.create(formula, tag, rebuild)
       new(formula.name, formula.pkg_version, tag, rebuild)
     end
 
+    sig { params(name: String, version: PkgVersion, tag: Utils::Bottles::Tag, rebuild: Integer).void }
     def initialize(name, version, tag, rebuild)
       @name = File.basename name
+
+      raise ArgumentError, "Invalid bottle name" unless Utils.safe_filename?(@name)
+      raise ArgumentError, "Invalid bottle version" unless Utils.safe_filename?(version.to_s)
+
       @version = version
       @tag = tag.to_s
       @rebuild = rebuild
     end
 
     sig { returns(String) }
-    def to_s
+    def to_str
       "#{name}--#{version}#{extname}"
     end
-    alias to_str to_s
+
+    sig { returns(String) }
+    def to_s = to_str
 
     sig { returns(String) }
     def json
@@ -333,7 +331,7 @@ class Bottle
 
   extend Forwardable
 
-  attr_reader :name, :resource, :cellar, :rebuild
+  attr_reader :name, :resource, :tag, :cellar, :rebuild
 
   def_delegators :resource, :url, :verify_download_integrity
   def_delegators :resource, :cached_download
@@ -359,7 +357,7 @@ class Bottle
   end
 
   def fetch(verify_download_integrity: true)
-    @resource.fetch(verify_download_integrity: verify_download_integrity)
+    @resource.fetch(verify_download_integrity:)
   rescue DownloadError
     raise unless fallback_on_error
 
@@ -415,6 +413,11 @@ class Bottle
     github_packages_manifest_resource_tab(github_packages_manifest_resource)
   end
 
+  sig { returns(Filename) }
+  def filename
+    Filename.create(resource.owner, @tag, @spec.rebuild)
+  end
+
   private
 
   def github_packages_manifest_resource_tab(github_packages_manifest_resource)
@@ -430,7 +433,7 @@ class Bottle
     manifests = json["manifests"]
     raise ArgumentError, "Missing 'manifests' section." if manifests.blank?
 
-    manifests_annotations = manifests.map { |m| m["annotations"] }.compact
+    manifests_annotations = manifests.filter_map { |m| m["annotations"] }
     raise ArgumentError, "Missing 'annotations' section." if manifests_annotations.blank?
 
     bottle_digest = @resource.checksum.hexdigest
@@ -506,6 +509,7 @@ class Bottle
 end
 
 class BottleSpecification
+  extend Attrable
   RELOCATABLE_CELLARS = [:any, :any_skip_relocation].freeze
 
   attr_rw :rebuild
@@ -579,7 +583,7 @@ class BottleSpecification
 
   sig { params(tag: T.any(Symbol, Utils::Bottles::Tag), no_older_versions: T::Boolean).returns(T::Boolean) }
   def tag?(tag, no_older_versions: false)
-    collector.tag?(tag, no_older_versions: no_older_versions)
+    collector.tag?(tag, no_older_versions:)
   end
 
   # Checksum methods in the DSL's bottle block take
@@ -603,7 +607,7 @@ class BottleSpecification
 
     cellar ||= tag.default_cellar
 
-    collector.add(tag, checksum: Checksum.new(digest), cellar: cellar)
+    collector.add(tag, checksum: Checksum.new(digest), cellar:)
   end
 
   sig {
@@ -611,17 +615,17 @@ class BottleSpecification
       .returns(T.nilable(Utils::Bottles::TagSpecification))
   }
   def tag_specification_for(tag, no_older_versions: false)
-    collector.specification_for(tag, no_older_versions: no_older_versions)
+    collector.specification_for(tag, no_older_versions:)
   end
 
   def checksums
     tags = collector.tags.sort_by do |tag|
       version = tag.to_macos_version
-      # Give arm64 bottles a higher priority so they are first
-      priority = (tag.arch == :arm64) ? "2" : "1"
+      # Give `arm64` bottles a higher priority so they are first.
+      priority = (tag.arch == :arm64) ? 2 : 1
       "#{priority}.#{version}_#{tag}"
     rescue MacOSVersion::Error
-      # Sort non-MacOS tags below MacOS tags.
+      # Sort non-macOS tags below macOS tags.
       "0.#{tag}"
     end
     tags.reverse.map do |tag|

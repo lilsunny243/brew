@@ -2,7 +2,7 @@
 
 require "installed_dependents"
 
-describe InstalledDependents do
+RSpec.describe InstalledDependents do
   include FileUtils
 
   def stub_formula(name, version = "1.0", &block)
@@ -51,7 +51,7 @@ describe InstalledDependents do
     end
 
     def alter_tab(keg)
-      tab = Tab.for_keg(keg)
+      tab = keg.tab
       yield tab
       tab.write
     end

@@ -7,8 +7,6 @@ require "erb"
 
 module Homebrew
   # Helper functions for generating shell completions.
-  #
-  # @api private
   module Completions
     Variables = Struct.new(
       :aliases,
@@ -72,7 +70,7 @@ module Homebrew
     sig { void }
     def self.link!
       Settings.write :linkcompletions, true
-      Tap.each do |tap|
+      Tap.installed.each do |tap|
         Utils::Link.link_completions tap.path, "brew completions link"
       end
     end
@@ -80,7 +78,7 @@ module Homebrew
     sig { void }
     def self.unlink!
       Settings.write :linkcompletions, false
-      Tap.each do |tap|
+      Tap.installed.each do |tap|
         next if tap.official?
 
         Utils::Link.unlink_completions tap.path
@@ -94,7 +92,7 @@ module Homebrew
 
     sig { returns(T::Boolean) }
     def self.completions_to_link?
-      Tap.each do |tap|
+      Tap.installed.each do |tap|
         next if tap.official?
 
         SHELLS.each do |shell|
@@ -155,7 +153,7 @@ module Homebrew
         name = option.first
         desc = option.second
         if name.start_with? "--[no-]"
-          options[name.remove("[no-]")] = desc
+          options[name.gsub("[no-]", "")] = desc
           options[name.sub("[no-]", "no-")] = desc
         else
           options[name] = desc
@@ -200,14 +198,14 @@ module Homebrew
     sig { params(commands: T::Array[String]).returns(String) }
     def self.generate_bash_completion_file(commands)
       variables = Variables.new(
-        completion_functions: commands.map do |command|
+        completion_functions: commands.filter_map do |command|
           generate_bash_subcommand_completion command
-        end.compact,
-        function_mappings:    commands.map do |command|
+        end,
+        function_mappings:    commands.filter_map do |command|
           next unless command_gets_completions? command
 
           "#{command}) _brew_#{Commands.method_name command} ;;"
-        end.compact,
+        end,
       )
 
       ERB.new((TEMPLATE_DIR/"bash.erb").read, trim_mode: ">").result(variables.instance_eval { binding })
@@ -276,13 +274,13 @@ module Homebrew
     sig { params(commands: T::Array[String]).returns(String) }
     def self.generate_zsh_completion_file(commands)
       variables = Variables.new(
-        aliases:                      Commands::HOMEBREW_INTERNAL_COMMAND_ALIASES.map do |alias_command, command|
-          alias_command = "'#{alias_command}'" if alias_command.start_with? "-"
+        aliases:                      Commands::HOMEBREW_INTERNAL_COMMAND_ALIASES.filter_map do |alias_cmd, command|
+          alias_cmd = "'#{alias_cmd}'" if alias_cmd.start_with? "-"
           command = "'#{command}'" if command.start_with? "-"
-          "#{alias_command} #{command}"
-        end.compact,
+          "#{alias_cmd} #{command}"
+        end,
 
-        builtin_command_descriptions: commands.map do |command|
+        builtin_command_descriptions: commands.filter_map do |command|
           next if Commands::HOMEBREW_INTERNAL_COMMAND_ALIASES.key? command
 
           description = Commands.command_description(command, short: true)
@@ -290,11 +288,11 @@ module Homebrew
 
           description = format_description description
           "'#{command}:#{description}'"
-        end.compact,
+        end,
 
-        completion_functions:         commands.map do |command|
+        completion_functions:         commands.filter_map do |command|
           generate_zsh_subcommand_completion command
-        end.compact,
+        end,
       )
 
       ERB.new((TEMPLATE_DIR/"zsh.erb").read, trim_mode: ">").result(variables.instance_eval { binding })
@@ -307,11 +305,11 @@ module Homebrew
       command_description = format_description Commands.command_description(command, short: true), fish: true
       lines = ["__fish_brew_complete_cmd '#{command}' '#{command_description}'"]
 
-      options = command_options(command).sort.map do |opt, desc|
+      options = command_options(command).sort.filter_map do |opt, desc|
         arg_line = "__fish_brew_complete_arg '#{command}' -l #{opt.sub(/^-+/, "")}"
         arg_line += " -d '#{format_description desc, fish: true}'" if desc.present?
         arg_line
-      end.compact
+      end
 
       subcommands = []
       named_args = []
@@ -350,9 +348,9 @@ module Homebrew
     sig { params(commands: T::Array[String]).returns(String) }
     def self.generate_fish_completion_file(commands)
       variables = Variables.new(
-        completion_functions: commands.map do |command|
+        completion_functions: commands.filter_map do |command|
           generate_fish_subcommand_completion command
-        end.compact,
+        end,
       )
 
       ERB.new((TEMPLATE_DIR/"fish.erb").read, trim_mode: ">").result(variables.instance_eval { binding })

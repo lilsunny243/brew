@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
+require "livecheck/livecheck"
 require "livecheck/skip_conditions"
 
-describe Homebrew::Livecheck::SkipConditions do
+RSpec.describe Homebrew::Livecheck::SkipConditions do
   subject(:skip_conditions) { described_class }
 
   let(:formulae) do
@@ -29,11 +30,6 @@ describe Homebrew::Livecheck::SkipConditions do
         homepage "https://brew.sh"
         url "https://brew.sh/test-0.0.1.tgz"
         disable! date: "2020-06-25", because: :unmaintained
-      end,
-      versioned:           formula("test@0.0.1") do
-        desc "Versioned test formula"
-        homepage "https://brew.sh"
-        url "https://brew.sh/test-0.0.1.tgz"
       end,
       head_only:           formula("test_head_only") do
         desc "HEAD-only test formula"
@@ -72,6 +68,11 @@ describe Homebrew::Livecheck::SkipConditions do
         livecheck do
           skip "Not maintained"
         end
+      end,
+      versioned:           formula("test@0.0.1") do
+        desc "Versioned test formula"
+        homepage "https://brew.sh"
+        url "https://brew.sh/test-0.0.1.tgz"
       end,
     }
   end
@@ -125,6 +126,18 @@ describe Homebrew::Livecheck::SkipConditions do
         homepage "https://brew.sh"
 
         disable! date: "2020-06-25", because: :discontinued
+      end,
+      extract_plist:     Cask::Cask.new("test_extract_plist_skip") do
+        version "0.0.1"
+
+        url "https://brew.sh/test-0.0.1.tgz"
+        name "Test ExtractPlist Skip"
+        desc "Skipped test cask"
+        homepage "https://brew.sh"
+
+        livecheck do
+          strategy :extract_plist
+        end
       end,
       latest:            Cask::Cask.new("test_latest") do
         version :latest
@@ -266,6 +279,14 @@ describe Homebrew::Livecheck::SkipConditions do
             livecheckable: false,
           },
         },
+        extract_plist:     {
+          cask:     "test_extract_plist_skip",
+          status:   "skipped",
+          messages: ["Use `--extract-plist` to enable checking multiple casks with ExtractPlist strategy"],
+          meta:     {
+            livecheckable: true,
+          },
+        },
         latest:            {
           cask:   "test_latest",
           status: "latest",
@@ -377,6 +398,13 @@ describe Homebrew::Livecheck::SkipConditions do
       it "skips" do
         expect(skip_conditions.skip_information(casks[:disabled]))
           .to eq(status_hashes[:cask][:disabled])
+      end
+    end
+
+    context "when a cask has a `livecheck` block using `ExtractPlist` and `--extract-plist` is not used" do
+      it "skips" do
+        expect(skip_conditions.skip_information(casks[:extract_plist], extract_plist: false))
+          .to eq(status_hashes[:cask][:extract_plist])
       end
     end
 
@@ -493,6 +521,15 @@ describe Homebrew::Livecheck::SkipConditions do
       it "errors" do
         expect { skip_conditions.referenced_skip_information(casks[:disabled], original_name) }
           .to raise_error(RuntimeError, "Referenced cask (test_disabled) is skipped as disabled")
+      end
+    end
+
+    context "when a cask has a `livecheck` block using `ExtractPlist` and `--extract-plist` is not used" do
+      it "skips" do
+        expect do
+          skip_conditions.referenced_skip_information(casks[:extract_plist], original_name, extract_plist: false)
+        end
+          .to raise_error(RuntimeError, "Referenced cask (test_extract_plist_skip) is automatically skipped")
       end
     end
 

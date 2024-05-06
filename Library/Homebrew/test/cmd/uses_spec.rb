@@ -1,8 +1,12 @@
 # frozen_string_literal: true
 
 require "cmd/shared_examples/args_parse"
+require "cmd/uses"
+require "fileutils"
 
-describe "brew uses" do
+RSpec.describe Homebrew::Cmd::Uses do
+  include FileUtils
+
   it_behaves_like "parseable arguments"
 
   it "prints the Formulae a given Formula is used by", :integration_test do

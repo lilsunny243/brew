@@ -10,7 +10,6 @@ module Superenv
 
     undef bin
 
-    # @private
     def bin
       return unless DevelopmentTools.installed?
 
@@ -25,12 +24,12 @@ module Superenv
         homebrew_extra_cmake_frameworks_paths,
         determine_cccfg
 
-  # @private
+  sig { returns(T::Array[Pathname]) }
   def homebrew_extra_pkg_config_paths
     [Pathname("/usr/lib/pkgconfig"), Pathname("#{HOMEBREW_LIBRARY}/Homebrew/os/mac/pkgconfig/#{MacOS.version}")]
   end
+  private :homebrew_extra_pkg_config_paths
 
-  # @private
   sig { returns(T::Boolean) }
   def libxml2_include_needed?
     return false if deps.any? { |d| d.name == "libxml2" }
@@ -38,6 +37,7 @@ module Superenv
 
     true
   end
+  private :libxml2_include_needed?
 
   def homebrew_extra_isystem_paths
     paths = []
@@ -99,8 +99,8 @@ module Superenv
       MacOS::CLT::PKG_PATH
     end
 
-    generic_setup_build_environment(formula: formula, cc: cc, build_bottle: build_bottle, bottle_arch: bottle_arch,
-                                    testing_formula: testing_formula, debug_symbols: debug_symbols)
+    generic_setup_build_environment(formula:, cc:, build_bottle:, bottle_arch:,
+                                    testing_formula:, debug_symbols:)
 
     # Filter out symbols known not to be defined since GNU Autotools can't
     # reliably figure this out with Xcode 8 and above.
@@ -140,6 +140,9 @@ module Superenv
     # See: https://github.com/python/cpython/issues/97524
     #      https://github.com/pybind/pybind11/pull/4301
     no_fixup_chains
+
+    # Strip build prefixes from linker where supported, for deterministic builds.
+    append_to_cccfg "o" if DevelopmentTools.ld64_version >= 512
   end
 
   def no_weak_imports

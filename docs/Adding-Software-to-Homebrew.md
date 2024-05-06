@@ -1,4 +1,4 @@
-# Adding Software To Homebrew
+# Adding Software to Homebrew
 
 Is your favourite software missing from Homebrew? Then you're the perfect person to resolve this problem.
 
@@ -28,7 +28,7 @@ If you're stuck, ask for help on GitHub or the [Homebrew discussion forum](https
 
 ### Testing and auditing the formula
 
-1. Run `brew audit --strict --new-formula --online <formula>` with your formula. If any errors occur, correct your formula and run the audit again. The audit should finish without any errors by the end of this step.
+1. Run `brew audit --strict --new --online <formula>` with your formula. If any errors occur, correct your formula and run the audit again. The audit should finish without any errors by the end of this step.
 
 1. Run your formula's test using `brew test <formula>`. The test should finish without any errors.
 
@@ -165,36 +165,13 @@ If the `generate_cask_token` script does not work for you, see [Cask Token Detai
 
 #### Creating the cask file
 
-Once you know the token, create your cask with the handy-dandy `brew create --cask` command:
+Once you know the token, create your cask with the `brew create --cask` command:
 
 ```bash
 brew create --cask download-url --set-name my-new-cask
 ```
 
-This will open `EDITOR` with a template for your new cask, to be stored in the file `my-new-cask.rb`. Running the `create` command above will get you a template that looks like this:
-
-```ruby
-cask "my-new-cask" do
-  version ""
-  sha256 ""
-
-  url "download-url"
-  name ""
-  desc ""
-  homepage ""
-
-  livecheck do
-    url ""
-    strategy ""
-  end
-
-  depends_on macos: ""
-
-  app ""
-
-  zap trash: ""
-end
-```
+This will open `EDITOR` with a template for your new cask, to be stored in the file `my-new-cask.rb`.
 
 #### Cask stanzas
 
@@ -242,7 +219,7 @@ Example:
 1. So, the `app` stanza should include the subfolder as a relative path:
 
    ```ruby
-   app "Simple Floating Clock/SimpleFloatingClock.app"
+app "Simple Floating Clock/SimpleFloatingClock.app"
    ```
 
 ### Testing and auditing the cask
@@ -251,6 +228,7 @@ Give it a shot with:
 
 ```bash
 export HOMEBREW_NO_AUTO_UPDATE=1
+export HOMEBREW_NO_INSTALL_FROM_API=1
 brew install my-new-cask
 ```
 
@@ -336,10 +314,10 @@ For cask commits in the Homebrew Cask project, we like to include the applicatio
 
 Examples of good, clear commit summaries:
 
-* `Add Transmission.app v1.0`
-* `Upgrade Transmission.app to v2.82`
-* `Fix checksum in Transmission.app cask`
-* `Add CodeBox Latest`
+* `transmission 1.0 (new cask)`
+* `transmission 2.82`
+* `transmission: fix checksum`
+* `codebox latest (new cask)`
 
 Examples of difficult, unclear commit summaries:
 
@@ -386,8 +364,9 @@ cd "$(brew --repository)"/Library/Taps/homebrew/homebrew-cask
 git checkout master
 ```
 
-If earlier you set the variable `HOMEBREW_NO_AUTO_UPDATE` then clean it up with:
+If earlier you set the variable `HOMEBREW_NO_AUTO_UPDATE` and `HOMEBREW_NO_INSTALL_FROM_API` then clean it up with:
 
 ```bash
 unset HOMEBREW_NO_AUTO_UPDATE
+unset HOMEBREW_NO_INSTALL_FROM_API
 ```

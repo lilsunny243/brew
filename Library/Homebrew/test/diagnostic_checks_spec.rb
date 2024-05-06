@@ -2,7 +2,7 @@
 
 require "diagnostic"
 
-describe Homebrew::Diagnostic::Checks do
+RSpec.describe Homebrew::Diagnostic::Checks do
   subject(:checks) { described_class.new }
 
   specify "#inject_file_list" do
@@ -64,7 +64,7 @@ describe Homebrew::Diagnostic::Checks do
     homebrew_path =
       "#{HOMEBREW_PREFIX}/bin#{File::PATH_SEPARATOR}" +
       ENV["HOMEBREW_PATH"].gsub(/(?:^|#{Regexp.escape(File::PATH_SEPARATOR)})#{Regexp.escape(sbin)}/, "")
-    stub_const("ORIGINAL_PATHS", PATH.new(homebrew_path).map { |path| Pathname.new(path).expand_path }.compact)
+    stub_const("ORIGINAL_PATHS", PATH.new(homebrew_path).filter_map { |path| Pathname.new(path).expand_path })
 
     expect(checks.check_user_path_1).to be_nil
     expect(checks.check_user_path_2).to be_nil

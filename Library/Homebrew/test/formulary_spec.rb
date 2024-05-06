@@ -4,9 +4,9 @@ require "formula"
 require "formula_installer"
 require "utils/bottles"
 
-describe Formulary do
+RSpec.describe Formulary do
   let(:formula_name) { "testball_bottle" }
-  let(:formula_path) { CoreTap.new.new_formula_path(formula_name) }
+  let(:formula_path) { CoreTap.instance.new_formula_path(formula_name) }
   let(:formula_content) do
     <<~RUBY
       class #{described_class.class_s(formula_name)} < Formula
@@ -81,11 +81,9 @@ describe Formulary do
     end
 
     context "with sharded Formula directory" do
-      before { CoreTap.instance.clear_cache }
-
       let(:formula_name) { "testball_sharded" }
       let(:formula_path) do
-        core_tap = CoreTap.new
+        core_tap = CoreTap.instance
         (core_tap.formula_dir/formula_name[0]).mkpath
         core_tap.new_formula_path(formula_name)
       end
@@ -111,7 +109,7 @@ describe Formulary do
       it "raises an error" do
         expect do
           described_class.factory(formula_name)
-        end.to raise_error(FormulaClassUnavailableError)
+        end.to raise_error(TapFormulaClassUnavailableError)
       end
     end
 
@@ -119,7 +117,7 @@ describe Formulary do
       expect(described_class.factory(formula_path)).to be_a(Formula)
     end
 
-    it "returns a Formula when given a URL" do
+    it "returns a Formula when given a URL", :needs_utils_curl, :no_api do
       formula = described_class.factory("file://#{formula_path}")
       expect(formula).to be_a(Formula)
     end
@@ -139,7 +137,7 @@ describe Formulary do
     context "when given an alias" do
       subject(:formula) { described_class.factory("foo") }
 
-      let(:alias_dir) { CoreTap.instance.alias_dir.tap(&:mkpath) }
+      let(:alias_dir) { CoreTap.instance.alias_dir }
       let(:alias_path) { alias_dir/"foo" }
 
       before do
@@ -152,14 +150,12 @@ describe Formulary do
       end
 
       it "calling #alias_path on the returned Formula returns the alias path" do
-        expect(formula.alias_path).to eq(alias_path.to_s)
+        expect(formula.alias_path).to eq(alias_path)
       end
     end
 
     context "with installed Formula" do
       before do
-        allow(described_class).to receive(:loader_for).and_call_original
-
         # don't try to load/fetch gcc/glibc
         allow(DevelopmentTools).to receive_messages(needs_libc_formula?: false, needs_compiler_formula?: false)
       end
@@ -186,8 +182,8 @@ describe Formulary do
     end
 
     context "when migrating from a Tap" do
-      let(:tap) { Tap.new("homebrew", "foo") }
-      let(:another_tap) { Tap.new("homebrew", "bar") }
+      let(:tap) { Tap.fetch("homebrew", "foo") }
+      let(:another_tap) { Tap.fetch("homebrew", "bar") }
       let(:tap_migrations_path) { tap.path/"tap_migrations.json" }
       let(:another_tap_formula_path) { another_tap.path/"Formula/#{formula_name}.rb" }
 
@@ -228,19 +224,28 @@ describe Formulary do
     end
 
     context "when loading from Tap" do
-      let(:tap) { Tap.new("homebrew", "foo") }
-      let(:another_tap) { Tap.new("homebrew", "bar") }
+      let(:tap) { Tap.fetch("homebrew", "foo") }
+      let(:another_tap) { Tap.fetch("homebrew", "bar") }
       let(:formula_path) { tap.path/"Formula/#{formula_name}.rb" }
+      let(:alias_name) { "bar" }
+      let(:alias_dir) { tap.alias_dir }
+      let(:alias_path) { alias_dir/alias_name }
+
+      before do
+        alias_dir.mkpath
+        FileUtils.ln_s formula_path, alias_path
+      end
 
       it "returns a Formula when given a name" do
         expect(described_class.factory(formula_name)).to be_a(Formula)
       end
 
       it "returns a Formula from an Alias path" do
-        alias_dir = tap.path/"Aliases"
-        alias_dir.mkpath
-        FileUtils.ln_s formula_path, alias_dir/"bar"
-        expect(described_class.factory("bar")).to be_a(Formula)
+        expect(described_class.factory(alias_name)).to be_a(Formula)
+      end
+
+      it "returns a Formula from a fully qualified Alias path" do
+        expect(described_class.factory("#{tap.name}/#{alias_name}")).to be_a(Formula)
       end
 
       it "raises an error when the Formula cannot be found" do
@@ -322,6 +327,8 @@ describe Formulary do
               "run_type"    => "immediate",
               "working_dir" => "/$HOME",
             },
+            "ruby_source_path"         => "Formula/#{formula_name}.rb",
+            "ruby_source_checksum"     => { "sha256" => "ABCDEFGHIJKLMNOPQRSTUVWXYZ" },
           }.merge(extra_items),
         }
       end
@@ -371,7 +378,11 @@ describe Formulary do
       end
 
       before do
-        allow(described_class).to receive(:loader_for).and_return(described_class::FormulaAPILoader.new(formula_name))
+        ENV.delete("HOMEBREW_NO_INSTALL_FROM_API")
+
+        # avoid unnecessary network calls
+        allow(Homebrew::API::Formula).to receive_messages(all_aliases: {}, all_renames: {})
+        allow(CoreTap.instance).to receive(:tap_migrations).and_return({})
 
         # don't try to load/fetch gcc/glibc
         allow(DevelopmentTools).to receive_messages(needs_libc_formula?: false, needs_compiler_formula?: false)
@@ -409,6 +420,8 @@ describe Formulary do
         expect(formula.service.working_dir).to eq(Dir.home)
         expect(formula.plist_name).to eq("custom.launchd.name")
         expect(formula.service_name).to eq("custom.systemd.name")
+
+        expect(formula.ruby_source_checksum.hexdigest).to eq("abcdefghijklmnopqrstuvwxyz")
 
         expect do
           formula.install
@@ -519,6 +532,116 @@ describe Formulary do
 
     it "returns a symbol if the original string starts with a colon" do
       expect(described_class.convert_to_string_or_symbol(":foo")).to eq :foo
+    end
+  end
+
+  describe "::loader_for" do
+    context "when given a relative path with two slashes" do
+      it "returns a `FromPathLoader`" do
+        mktmpdir.cd do
+          FileUtils.mkdir "Formula"
+          FileUtils.touch "Formula/gcc.rb"
+          expect(described_class.loader_for("./Formula/gcc.rb")).to be_a Formulary::FromPathLoader
+        end
+      end
+    end
+
+    context "when given a tapped name" do
+      it "returns a `FromTapLoader`" do
+        expect(described_class.loader_for("homebrew/core/gcc")).to be_a Formulary::FromTapLoader
+      end
+    end
+
+    context "when not using the API" do
+      before do
+        ENV["HOMEBREW_NO_INSTALL_FROM_API"] = "1"
+      end
+
+      context "when a formula is migrated" do
+        let(:token) { "foo" }
+
+        let(:core_tap) { CoreTap.instance }
+        let(:core_cask_tap) { CoreCaskTap.instance }
+
+        let(:tap_migrations) do
+          {
+            token => new_tap.name,
+          }
+        end
+
+        before do
+          old_tap.path.mkpath
+          new_tap.path.mkpath
+          (old_tap.path/"tap_migrations.json").write tap_migrations.to_json
+        end
+
+        context "to a cask in the default tap" do
+          let(:old_tap) { core_tap }
+          let(:new_tap) { core_cask_tap }
+
+          let(:cask_file) { new_tap.cask_dir/"#{token}.rb" }
+
+          before do
+            new_tap.cask_dir.mkpath
+            FileUtils.touch cask_file
+          end
+
+          it "warn only once" do
+            expect do
+              described_class.loader_for(token)
+            end.to output(
+              a_string_including("Warning: Formula #{token} was renamed to #{new_tap}/#{token}.").once,
+            ).to_stderr
+          end
+        end
+
+        context "to the default tap" do
+          let(:old_tap) { core_cask_tap }
+          let(:new_tap) { core_tap }
+
+          let(:formula_file) { new_tap.formula_dir/"#{token}.rb" }
+
+          before do
+            new_tap.formula_dir.mkpath
+            FileUtils.touch formula_file
+          end
+
+          it "does not warn when loading the short token" do
+            expect do
+              described_class.loader_for(token)
+            end.not_to output.to_stderr
+          end
+
+          it "does not warn when loading the full token in the default tap" do
+            expect do
+              described_class.loader_for("#{new_tap}/#{token}")
+            end.not_to output.to_stderr
+          end
+
+          it "warns when loading the full token in the old tap" do
+            expect do
+              described_class.loader_for("#{old_tap}/#{token}")
+            end.to output(
+              a_string_including("Formula #{old_tap}/#{token} was renamed to #{token}.").once,
+            ).to_stderr
+          end
+
+          # FIXME
+          # context "when there is an infinite tap migration loop" do
+          #   before do
+          #     (new_tap.path/"tap_migrations.json").write({
+          #       token => old_tap.name,
+          #     }.to_json)
+          #   end
+          #
+          #   it "stops recursing" do
+          #     expect do
+          #       described_class.loader_for("#{new_tap}/#{token}")
+          #     end.not_to output.to_stderr
+          #   end
+          # end
+        end
+      end
     end
   end
 end
