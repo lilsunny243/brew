@@ -45,8 +45,6 @@ module Homebrew
                description: "Limit number of package results returned."
         flag   "--start-with=",
                description: "Letter or word that the list of package results should alphabetically follow."
-        switch "-f", "--force",
-               hidden:      true
 
         conflicts "--cask", "--formula"
         conflicts "--tap=", "--installed"
@@ -63,8 +61,6 @@ module Homebrew
           raise UsageError, "`--limit` must be used with either `--formula` or `--cask`."
         end
 
-        odisabled "brew bump --force" if args.force?
-
         Homebrew.with_no_api_env do
           formulae_and_casks = if args.tap
             tap = Tap.fetch(T.must(args.tap))
@@ -78,13 +74,7 @@ module Homebrew
             casks = args.formula? ? [] : Cask::Caskroom.casks
             formulae + casks
           elsif args.named.present?
-            if args.formula?
-              args.named.to_formulae
-            elsif args.cask?
-              args.named.to_casks
-            else
-              args.named.to_formulae_and_casks
-            end
+            args.named.to_formulae_and_casks_with_taps
           end
 
           formulae_and_casks = formulae_and_casks&.sort_by do |formula_or_cask|

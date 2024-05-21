@@ -532,7 +532,7 @@ __fish_brew_complete_arg 'contributions' -l debug -d 'Display any debugging info
 __fish_brew_complete_arg 'contributions' -l from -d 'Date (ISO-8601 format) to start searching contributions. Omitting this flag searches the last year'
 __fish_brew_complete_arg 'contributions' -l help -d 'Show this message'
 __fish_brew_complete_arg 'contributions' -l quiet -d 'Make some output more quiet'
-__fish_brew_complete_arg 'contributions' -l repositories -d 'Specify a comma-separated list of repositories to search. Supported repositories: `brew`, `core`, `cask`, `aliases`, `bundle`, `command-not-found`, `test-bot`, `services` and `cask-fonts`. Omitting this flag, or specifying `--repositories=primary`, searches only the main repositories: brew,core,cask. Specifying `--repositories=all`, searches all repositories. '
+__fish_brew_complete_arg 'contributions' -l repositories -d 'Specify a comma-separated list of repositories to search. Supported repositories: `brew`, `core`, `cask`, `aliases`, `bundle`, `command-not-found`, `test-bot` and `services`. Omitting this flag, or specifying `--repositories=primary`, searches only the main repositories: brew,core,cask. Specifying `--repositories=all`, searches all repositories. '
 __fish_brew_complete_arg 'contributions' -l to -d 'Date (ISO-8601 format) to stop searching contributions'
 __fish_brew_complete_arg 'contributions' -l user -d 'Specify a comma-separated list of GitHub usernames or email addresses to find contributions from. Omitting this flag searches maintainers'
 __fish_brew_complete_arg 'contributions' -l verbose -d 'Make some output more verbose'
@@ -1153,13 +1153,6 @@ __fish_brew_complete_arg 'post_install' -l verbose -d 'Make some output more ver
 __fish_brew_complete_arg 'post_install' -a '(__fish_brew_suggest_formulae_installed)'
 
 
-__fish_brew_complete_cmd 'postgresql-upgrade-database' 'Upgrades the database for the `postgresql` formula'
-__fish_brew_complete_arg 'postgresql-upgrade-database' -l debug -d 'Display any debugging information'
-__fish_brew_complete_arg 'postgresql-upgrade-database' -l help -d 'Show this message'
-__fish_brew_complete_arg 'postgresql-upgrade-database' -l quiet -d 'Make some output more quiet'
-__fish_brew_complete_arg 'postgresql-upgrade-database' -l verbose -d 'Make some output more verbose'
-
-
 __fish_brew_complete_cmd 'postinstall' 'Rerun the post-install steps for formula'
 __fish_brew_complete_arg 'postinstall' -l debug -d 'Display any debugging information'
 __fish_brew_complete_arg 'postinstall' -l help -d 'Show this message'
@@ -1243,6 +1236,7 @@ __fish_brew_complete_arg 'prof' -l help -d 'Show this message'
 __fish_brew_complete_arg 'prof' -l quiet -d 'Make some output more quiet'
 __fish_brew_complete_arg 'prof' -l stackprof -d 'Use `stackprof` instead of `ruby-prof` (the default)'
 __fish_brew_complete_arg 'prof' -l verbose -d 'Make some output more verbose'
+__fish_brew_complete_arg 'prof' -l vernier -d 'Use `vernier` instead of `ruby-prof` (the default)'
 __fish_brew_complete_arg 'prof' -a '(__fish_brew_suggest_commands)'
 
 

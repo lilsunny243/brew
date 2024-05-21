@@ -44,7 +44,7 @@ module Homebrew
         casks = args.named.to_paths(only: :cask, recurse_tap: true).map { |path| Cask::CaskLoader.load(path) }
 
         unversioned_casks = casks.select do |cask|
-          cask.url&.unversioned? && !cask.livecheckable? && !cask.discontinued?
+          cask.url&.unversioned? && !cask.livecheckable?
         end
 
         ohai "Unversioned Casks: #{unversioned_casks.count} (#{state.size} cached)"
@@ -125,6 +125,8 @@ module Homebrew
             end
           rescue => e
             onoe e
+
+            nil
           end
 
           if sha256.present? && last_sha256 != sha256
@@ -134,6 +136,8 @@ module Homebrew
               end
             rescue Timeout::Error
               onoe "Timed out guessing version for cask '#{cask}'."
+
+              nil
             end
 
             if version

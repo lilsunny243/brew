@@ -197,7 +197,7 @@ module Cask
     def audit_description
       # Fonts seldom benefit from descriptions and requiring them disproportionately
       # increases the maintenance burden.
-      return if cask.tap == "homebrew/cask-fonts"
+      return if cask.tap == "homebrew/cask" && cask.token.include?("font-")
 
       add_error("Cask should have a description. Please add a `desc` stanza.", strict_only: true) if cask.desc.blank?
     end
@@ -289,7 +289,7 @@ module Cask
 
     sig { params(livecheck_result: T.any(NilClass, T::Boolean, Symbol)).void }
     def audit_hosting_with_livecheck(livecheck_result: audit_livecheck_version)
-      return if cask.discontinued? || cask.deprecated? || cask.disabled?
+      return if cask.deprecated? || cask.disabled?
       return if cask.version&.latest?
       return unless cask.url
       return if block_url_offline?
@@ -682,7 +682,7 @@ module Cask
     sig { void }
     def audit_github_repository_archived
       # Deprecated/disabled casks may have an archived repository.
-      return if cask.discontinued? || cask.deprecated? || cask.disabled?
+      return if cask.deprecated? || cask.disabled?
 
       user, repo = get_repo_data(%r{https?://github\.com/([^/]+)/([^/]+)/?.*}) if online?
       return if user.nil?
@@ -696,7 +696,7 @@ module Cask
     sig { void }
     def audit_gitlab_repository_archived
       # Deprecated/disabled casks may have an archived repository.
-      return if cask.discontinued? || cask.deprecated? || cask.disabled?
+      return if cask.deprecated? || cask.disabled?
 
       user, repo = get_repo_data(%r{https?://gitlab\.com/([^/]+)/([^/]+)/?.*}) if online?
       return if user.nil?
@@ -868,7 +868,7 @@ module Cask
 
     sig { returns(T::Boolean) }
     def bad_sourceforge_url?
-      bad_url_format?(/sourceforge/,
+      bad_url_format?(%r{((downloads|\.dl)\.|//)sourceforge},
                       [
                         %r{\Ahttps://sourceforge\.net/projects/[^/]+/files/latest/download\Z},
                         %r{\Ahttps://downloads\.sourceforge\.net/(?!(project|sourceforge)/)},

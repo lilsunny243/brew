@@ -5,13 +5,14 @@ require "date"
 require "json"
 require "utils/popen"
 require "exceptions"
+require "system_command"
 
 module Homebrew
   module Attestation
+    extend SystemCommand::Mixin
+
     # @api private
     HOMEBREW_CORE_REPO = "Homebrew/homebrew-core"
-    # @api private
-    HOMEBREW_CORE_CI_URI = "https://github.com/Homebrew/homebrew-core/.github/workflows/publish-commit-bottles.yml@refs/heads/master"
 
     # @api private
     BACKFILL_REPO = "trailofbits/homebrew-brew-verify"
@@ -32,6 +33,12 @@ module Homebrew
     #
     # @api private
     class InvalidAttestationError < RuntimeError; end
+
+    # Raised if attestation verification cannot continue due to missing
+    # credentials.
+    #
+    # @api private
+    class GhAuthNeeded < RuntimeError; end
 
     # Returns a path to a suitable `gh` executable for attestation verification.
     #
@@ -56,6 +63,7 @@ module Homebrew
     # `https://github/OWNER/REPO/.github/workflows/WORKFLOW.yml@REF` format.
     #
     # @return [Hash] the JSON-decoded response.
+    # @raise [GhAuthNeeded] on any authentication failures
     # @raise [InvalidAttestationError] on any verification failures
     #
     # @api private
@@ -64,19 +72,29 @@ module Homebrew
              signing_workflow: T.nilable(String), subject: T.nilable(String)).returns(T::Hash[T.untyped, T.untyped])
     }
     def self.check_attestation(bottle, signing_repo, signing_workflow = nil, subject = nil)
-      cmd = [gh_executable, "attestation", "verify", bottle.cached_download, "--repo", signing_repo, "--format",
+      cmd = ["attestation", "verify", bottle.cached_download, "--repo", signing_repo, "--format",
              "json"]
 
       cmd += ["--cert-identity", signing_workflow] if signing_workflow.present?
 
+      # Fail early if we have no credentials. The command below invariably
+      # fails without them, so this saves us a network roundtrip before
+      # presenting the user with the same error.
+      credentials = GitHub::API.credentials
+      raise GhAuthNeeded, "missing credentials" if credentials.blank?
+
       begin
-        output = Utils.safe_popen_read(*cmd)
+        result = system_command!(gh_executable, args: cmd, env: { "GH_TOKEN" => credentials },
+                                secrets: [credentials])
       rescue ErrorDuringExecution => e
+        # Even if we have credentials, they may be invalid or malformed.
+        raise GhAuthNeeded, "invalid credentials" if e.status.exitstatus == 4
+
         raise InvalidAttestationError, "attestation verification failed: #{e}"
       end
 
       begin
-        attestations = JSON.parse(output)
+        attestations = JSON.parse(result.stdout)
       rescue JSON::ParserError
         raise InvalidAttestationError, "attestation verification returned malformed JSON"
       end
@@ -100,13 +118,25 @@ module Homebrew
     # This is a specialization of `check_attestation` for homebrew-core.
     #
     # @return [Hash] the JSON-decoded response
+    # @raise [GhAuthNeeded] on any authentication failures
     # @raise [InvalidAttestationError] on any verification failures
     #
     # @api private
     sig { params(bottle: Bottle).returns(T::Hash[T.untyped, T.untyped]) }
     def self.check_core_attestation(bottle)
       begin
-        attestation = check_attestation bottle, HOMEBREW_CORE_REPO, HOMEBREW_CORE_CI_URI
+        # Ideally, we would also constrain the signing workflow here, but homebrew-core
+        # currently uses multiple signing workflows to produce bottles
+        # (e.g. `dispatch-build-bottle.yml`, `dispatch-rebottle.yml`, etc.).
+        #
+        # We could check each of these (1) explicitly (slow), (2) by generating a pattern
+        # to pass into `--cert-identity-regex` (requires us to build up a Go-style regex),
+        # or (3) by checking the resulting JSON for the expected signing workflow.
+        #
+        # Long term, we should probably either do (3) *or* switch to a single reusable
+        # workflow, which would then be our sole identity. However, GitHub's
+        # attestations currently do not include reusable workflow state by default.
+        attestation = check_attestation bottle, HOMEBREW_CORE_REPO
         return attestation
       rescue InvalidAttestationError
         odebug "falling back on backfilled attestation for #{bottle}"

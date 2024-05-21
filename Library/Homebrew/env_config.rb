@@ -1,8 +1,6 @@
 # typed: true
 # frozen_string_literal: true
 
-require "set"
-
 module Homebrew
   # Helper module for querying Homebrew-specific environment variables.
   #
@@ -11,6 +9,11 @@ module Homebrew
     module_function
 
     ENVS = {
+      HOMEBREW_ALLOWED_TAPS:                     {
+        description: "A space-separated list of taps. Homebrew will refuse to install a " \
+                     "formula unless it and all of its dependencies are in an official tap " \
+                     "or in a tap on this list.",
+      },
       HOMEBREW_API_AUTO_UPDATE_SECS:             {
         description: "Check Homebrew's API for new formulae or cask data every " \
                      "`HOMEBREW_API_AUTO_UPDATE_SECS` seconds. Alternatively, disable API auto-update " \
@@ -39,10 +42,10 @@ module Homebrew
                      "to instead be downloaded from " \
                      "`http://localhost:8080/v2/homebrew/core/gettext/manifests/0.21`",
       },
-      HOMEBREW_AUTOREMOVE:                       {
-        description: "If set, calls to `brew cleanup` and `brew uninstall` will automatically " \
-                     "remove unused formula dependents and if `HOMEBREW_NO_INSTALL_CLEANUP` is not set, " \
-                     "`brew cleanup` will start running `brew autoremove` periodically.",
+      HOMEBREW_ARTIFACT_DOMAIN_NO_FALLBACK:      {
+        description: "If `HOMEBREW_ARTIFACT_DOMAIN` and `HOMEBREW_ARTIFACT_DOMAIN_NO_FALLBACK` are both set, " \
+                     "if the request to `HOMEBREW_ARTIFACT_DOMAIN` fails then it Homebrew will error rather than " \
+                     "trying any other/default URLs.",
         boolean:     true,
       },
       HOMEBREW_AUTO_UPDATE_SECS:                 {
@@ -87,6 +90,9 @@ module Homebrew
       HOMEBREW_BROWSER:                          {
         description:  "Use this as the browser when opening project homepages.",
         default_text: "`$BROWSER` or the OS's default browser.",
+      },
+      HOMEBREW_BUNDLE_USER_CACHE:                {
+        description: "If set, use this directory as the `bundle`(1) user cache.",
       },
       HOMEBREW_CACHE:                            {
         description:  "Use this directory as the download cache.",
@@ -298,6 +304,11 @@ module Homebrew
       HOMEBREW_NO_ANALYTICS:                     {
         description: "If set, do not send analytics. Google Analytics were destroyed. " \
                      "For more information, see: <https://docs.brew.sh/Analytics>",
+        boolean:     true,
+      },
+      HOMEBREW_NO_AUTOREMOVE:                    {
+        description: "If set, calls to `brew cleanup` and `brew uninstall` will not automatically " \
+                     "remove unused formula dependents.",
         boolean:     true,
       },
       HOMEBREW_NO_AUTO_UPDATE:                   {

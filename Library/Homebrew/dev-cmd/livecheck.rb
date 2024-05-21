@@ -73,13 +73,7 @@ module Homebrew
             casks = args.formula? ? [] : Cask::Cask.all(eval_all: args.eval_all?)
             formulae + casks
           elsif args.named.present?
-            if args.formula?
-              args.named.to_formulae
-            elsif args.cask?
-              args.named.to_casks
-            else
-              args.named.to_formulae_and_casks
-            end
+            args.named.to_formulae_and_casks_with_taps
           elsif File.exist?(watchlist_path)
             begin
               names = Pathname.new(watchlist_path).read.lines
@@ -120,19 +114,7 @@ module Homebrew
       private
 
       def watchlist_path
-        @watchlist_path ||= begin
-          watchlist = File.expand_path(Homebrew::EnvConfig.livecheck_watchlist)
-
-          unless File.exist?(watchlist)
-            previous_default_watchlist = File.expand_path("~/.brew_livecheck_watchlist")
-            if File.exist?(previous_default_watchlist)
-              odisabled "~/.brew_livecheck_watchlist", "~/.homebrew/livecheck_watchlist.txt"
-              watchlist = previous_default_watchlist
-            end
-          end
-
-          watchlist
-        end
+        @watchlist_path ||= File.expand_path(Homebrew::EnvConfig.livecheck_watchlist)
       end
     end
   end

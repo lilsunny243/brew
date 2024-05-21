@@ -35,11 +35,6 @@ module Homebrew
         switch "--autosquash",
                description: "Automatically reformat and reword commits in the pull request to our " \
                             "preferred format."
-        switch "--no-autosquash",
-               description: "Skip automatically reformatting and rewording commits in the pull request to our " \
-                            "preferred format.",
-               disable:     true, # odisabled: remove this switch with 4.3.0
-               hidden:      true
         switch "--branch-okay",
                description: "Do not warn if pulling to a branch besides the repository default (useful for testing)."
         switch "--resolve",
@@ -175,7 +170,7 @@ module Homebrew
               safe_system HOMEBREW_BREW_FILE, *upload_args
             end
           ensure
-            if args.retain_bottle_dir? && ENV["GITHUB_ACTIONS"]
+            if args.retain_bottle_dir? && GitHub::Actions.env_set?
               ohai "Bottle files retained at:", dir
               File.open(ENV.fetch("GITHUB_OUTPUT"), "a") do |f|
                 f.puts "bottle_path=#{dir}"

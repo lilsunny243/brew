@@ -1998,10 +1998,9 @@ Summarise contributions to Homebrew repositories.
 
 : Specify a comma-separated list of repositories to search. Supported
   repositories: `brew`, `core`, `cask`, `aliases`, `bundle`,
-  `command-not-found`, `test-bot`, `services` and `cask-fonts`. Omitting this
-  flag, or specifying `--repositories=primary`, searches only the main
-  repositories: brew,core,cask. Specifying `--repositories=all`, searches all
-  repositories.
+  `command-not-found`, `test-bot` and `services`. Omitting this flag, or
+  specifying `--repositories=primary`, searches only the main repositories:
+  brew,core,cask. Specifying `--repositories=all`, searches all repositories.
 
 `--from`
 
@@ -2508,13 +2507,17 @@ Apply the bottle commit and publish bottles to a host.
 : Use the specified download strategy class for downloading the bottle's URL
   instead of Homebrew's default.
 
-### `prof` \[`--stackprof`\] *`command`* \[...\]
+### `prof` \[`--stackprof`\] \[`--vernier`\] *`command`* \[...\]
 
 Run Homebrew with a Ruby profiler. For example, `brew prof readall`.
 
 `--stackprof`
 
 : Use `stackprof` instead of `ruby-prof` (the default).
+
+`--vernier`
+
+: Use `vernier` instead of `ruby-prof` (the default).
 
 ### `release` \[`--major`\] \[`--minor`\]
 
@@ -3470,6 +3473,12 @@ prefix-specific files take precedence over system-wide files (unless
 Note that these files do not support shell variable expansion e.g. `$HOME` or
 command execution e.g. `$(cat file)`.
 
+`HOMEBREW_ALLOWED_TAPS`
+
+: A space-separated list of taps. Homebrew will refuse to install a formula
+  unless it and all of its dependencies are in an official tap or in a tap on
+  this list.
+
 `HOMEBREW_API_AUTO_UPDATE_SECS`
 
 : Check Homebrew's API for new formulae or cask data every
@@ -3504,11 +3513,11 @@ command execution e.g. `$(cat file)`.
   downloaded from
   `http://localhost:8080/v2/homebrew/core/gettext/manifests/0.21`
 
-`HOMEBREW_AUTOREMOVE`
+`HOMEBREW_ARTIFACT_DOMAIN_NO_FALLBACK`
 
-: If set, calls to `brew cleanup` and `brew uninstall` will automatically remove
-  unused formula dependents and if `HOMEBREW_NO_INSTALL_CLEANUP` is not set,
-  `brew cleanup` will start running `brew autoremove` periodically.
+: If `HOMEBREW_ARTIFACT_DOMAIN` and `HOMEBREW_ARTIFACT_DOMAIN_NO_FALLBACK` are
+  both set, if the request to `HOMEBREW_ARTIFACT_DOMAIN` fails then it Homebrew
+  will error rather than trying any other/default URLs.
 
 `HOMEBREW_AUTO_UPDATE_SECS`
 
@@ -3562,6 +3571,10 @@ command execution e.g. `$(cat file)`.
 : Use this as the browser when opening project homepages.
   
   *Default:* `$BROWSER` or the OS's default browser.
+
+`HOMEBREW_BUNDLE_USER_CACHE`
+
+: If set, use this directory as the `bundle`(1) user cache.
 
 `HOMEBREW_CACHE`
 
@@ -3823,6 +3836,11 @@ command execution e.g. `$(cat file)`.
 
 : If set, do not send analytics. Google Analytics were destroyed. For more
   information, see: <https://docs.brew.sh/Analytics>
+
+`HOMEBREW_NO_AUTOREMOVE`
+
+: If set, calls to `brew cleanup` and `brew uninstall` will not automatically
+  remove unused formula dependents.
 
 `HOMEBREW_NO_AUTO_UPDATE`
 

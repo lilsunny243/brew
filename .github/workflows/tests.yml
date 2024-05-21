@@ -110,7 +110,6 @@ jobs:
         run: |
           brew tap homebrew/aliases
           brew tap homebrew/bundle
-          brew tap homebrew/cask-fonts
           brew tap homebrew/command-not-found
           brew tap homebrew/formula-analytics
           brew tap homebrew/portable-ruby
@@ -130,10 +129,9 @@ jobs:
                      homebrew/formula-analytics \
                      homebrew/portable-ruby
 
-      - name: Run brew style on cask taps
+      - name: Run brew style on homebrew/cask
         run: |
-          brew style homebrew/cask \
-                     homebrew/cask-fonts
+          brew style homebrew/cask
 
   formula-audit:
     name: formula audit
@@ -172,17 +170,12 @@ jobs:
           cask: true
           test-bot: false
 
-      - name: Set up Homebrew all cask taps
-        run: |
-          brew tap homebrew/cask-fonts
-
       - name: Run brew readall on all casks
-        run: brew readall --os=all --arch=all homebrew/cask homebrew/cask-fonts
+        run: brew readall --os=all --arch=all homebrew/cask
 
-      - name: Run brew audit --skip-style on casks
+      - name: Run brew audit --skip-style on homebrew/cask
         run: |
           brew audit --skip-style --except=version --tap=homebrew/cask
-          brew audit --skip-style --except=version --tap=homebrew/cask-fonts
 
       - name: Generate formula API
         run: brew generate-formula-api --dry-run
@@ -387,7 +380,7 @@ jobs:
           HOMEBREW_BUILDPULSE_ACCOUNT_ID: 1503512
           HOMEBREW_BUILDPULSE_REPOSITORY_ID: 53238813
 
-      - uses: codecov/codecov-action@5ecb98a3c6b747ed38dc09f787459979aebb39be # v4.3.1
+      - uses: codecov/codecov-action@125fc84a9a348dbcf27191600683ec096ec9021c # v4.4.1
         with:
           working-directory: ${{ steps.set-up-homebrew.outputs.repository-path }}
           files: Library/Homebrew/test/coverage/coverage.xml
@@ -412,6 +405,7 @@ jobs:
             runs-on: macos-14
     env:
       HOMEBREW_TEST_BOT_ANALYTICS: 1
+      HOMEBREW_ENFORCE_SBOM: 1
     steps:
       - name: Set up Homebrew
         id: set-up-homebrew

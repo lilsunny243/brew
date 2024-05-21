@@ -3,15 +3,32 @@
 ##### to be able to `source` in shell configurations run quickly.
 #####
 
-# Doesn't need a default case because we don't support other OSs
-# shellcheck disable=SC2249
-HOMEBREW_PROCESSOR="$(uname -m)"
-HOMEBREW_PHYSICAL_PROCESSOR="${HOMEBREW_PROCESSOR}"
-HOMEBREW_SYSTEM="$(uname -s)"
-case "${HOMEBREW_SYSTEM}" in
-  Darwin) HOMEBREW_MACOS="1" ;;
-  Linux) HOMEBREW_LINUX="1" ;;
+case "${MACHTYPE}" in
+  arm64-*)
+    HOMEBREW_PROCESSOR="arm64"
+    ;;
+  x86_64-*)
+    HOMEBREW_PROCESSOR="x86_64"
+    ;;
+  *)
+    HOMEBREW_PROCESSOR="$(uname -m)"
+    ;;
 esac
+
+case "${OSTYPE}" in
+  darwin*)
+    HOMEBREW_SYSTEM="Darwin"
+    HOMEBREW_MACOS="1"
+    ;;
+  linux*)
+    HOMEBREW_SYSTEM="Linux"
+    HOMEBREW_LINUX="1"
+    ;;
+  *)
+    HOMEBREW_SYSTEM="$(uname -s)"
+    ;;
+esac
+HOMEBREW_PHYSICAL_PROCESSOR="${HOMEBREW_PROCESSOR}"
 
 HOMEBREW_MACOS_ARM_DEFAULT_PREFIX="/opt/homebrew"
 HOMEBREW_MACOS_ARM_DEFAULT_REPOSITORY="${HOMEBREW_MACOS_ARM_DEFAULT_PREFIX}"
@@ -75,15 +92,17 @@ else
   HOMEBREW_CELLAR="${HOMEBREW_PREFIX}/Cellar"
 fi
 
+HOMEBREW_CASKROOM="${HOMEBREW_PREFIX}/Caskroom"
+
 HOMEBREW_CACHE="${HOMEBREW_CACHE:-${HOMEBREW_DEFAULT_CACHE}}"
 HOMEBREW_LOGS="${HOMEBREW_LOGS:-${HOMEBREW_DEFAULT_LOGS}}"
 HOMEBREW_TEMP="${HOMEBREW_TEMP:-${HOMEBREW_DEFAULT_TEMP}}"
 
-# Don't need to handle a default case.
-# HOMEBREW_LIBRARY set by bin/brew
-# shellcheck disable=SC2249,SC2154
-#
 # commands that take a single or no arguments.
+# HOMEBREW_LIBRARY set by bin/brew
+# shellcheck disable=SC2154
+# doesn't need a default case as other arguments handled elsewhere.
+# shellcheck disable=SC2249
 case "$1" in
   formulae)
     source "${HOMEBREW_LIBRARY}/Homebrew/cmd/formulae.sh"
@@ -109,6 +128,8 @@ case "$1" in
     ;;
 esac
 # functions that take multiple arguments or handle multiple commands.
+# doesn't need a default case as other arguments handled elsewhere.
+# shellcheck disable=SC2249
 case "$@" in
   --cellar)
     echo "${HOMEBREW_CELLAR}"
@@ -119,7 +140,7 @@ case "$@" in
     exit 0
     ;;
   --caskroom)
-    echo "${HOMEBREW_PREFIX}/Caskroom"
+    echo "${HOMEBREW_CASKROOM}"
     exit 0
     ;;
   --cache)
@@ -135,6 +156,11 @@ case "$@" in
   command*)
     source "${HOMEBREW_LIBRARY}/Homebrew/command_path.sh"
     homebrew-command-path "$@" && exit 0
+    ;;
+  # falls back to cmd/list.rb on a non-zero return
+  list*)
+    source "${HOMEBREW_LIBRARY}/Homebrew/list.sh"
+    homebrew-list "$@" && exit 0
     ;;
 esac
 
@@ -232,7 +258,7 @@ numeric() {
 }
 
 check-run-command-as-root() {
-  [[ "$(id -u)" == 0 || "$(id -ur)" == 0 ]] || return
+  [[ "${EUID}" == 0 || "${UID}" == 0 ]] || return
 
   # Allow Azure Pipelines/GitHub Actions/Docker/Concourse/Kubernetes to do everything as root (as it's normal there)
   [[ -f /.dockerenv ]] && return
@@ -429,11 +455,11 @@ fi
 
 # Many Pathname operations use getwd when they shouldn't, and then throw
 # odd exceptions. Reduce our support burden by showing a user-friendly error.
-if ! [[ -d "$(pwd)" ]]
+if ! [[ -d "${PWD}" ]]
 then
   odie "The current working directory must exist to run brew."
 fi
-if ! [[ -r "$(pwd)" ]]
+if ! [[ -r "${PWD}" ]]
 then
   odie "The current working directory must be readable to ${USER} to run brew."
 fi
@@ -495,7 +521,27 @@ setup_git() {
 setup_curl
 setup_git
 
-HOMEBREW_VERSION="$("${HOMEBREW_GIT}" -C "${HOMEBREW_REPOSITORY}" describe --tags --dirty --abbrev=7 2>/dev/null)"
+GIT_DESCRIBE_CACHE="${HOMEBREW_REPOSITORY}/.git/describe-cache"
+GIT_REVISION=$("${HOMEBREW_GIT}" -C "${HOMEBREW_REPOSITORY}" rev-parse HEAD 2>/dev/null)
+if [[ -n "${GIT_REVISION}" ]]
+then
+  GIT_DESCRIBE_CACHE_FILE="${GIT_DESCRIBE_CACHE}/${GIT_REVISION}"
+  if [[ -f "${GIT_DESCRIBE_CACHE_FILE}" ]]
+  then
+    HOMEBREW_VERSION="$(cat "${GIT_DESCRIBE_CACHE_FILE}")"
+  else
+    rm -rf "${GIT_DESCRIBE_CACHE}"
+    HOMEBREW_VERSION="$("${HOMEBREW_GIT}" -C "${HOMEBREW_REPOSITORY}" describe --tags --dirty --abbrev=7 2>/dev/null)"
+    mkdir -p "${GIT_DESCRIBE_CACHE}"
+    echo "${HOMEBREW_VERSION}" >"${GIT_DESCRIBE_CACHE_FILE}"
+  fi
+  unset GIT_DESCRIBE_CACHE_FILE
+else
+  rm -rf "${GIT_DESCRIBE_CACHE}"
+fi
+unset GIT_REVISION
+unset GIT_DESCRIBE_CACHE
+
 HOMEBREW_USER_AGENT_VERSION="${HOMEBREW_VERSION}"
 if [[ -z "${HOMEBREW_VERSION}" ]]
 then
@@ -508,7 +554,16 @@ HOMEBREW_CORE_REPOSITORY="${HOMEBREW_LIBRARY}/Taps/homebrew/homebrew-core"
 # shellcheck disable=SC2034
 HOMEBREW_CASK_REPOSITORY="${HOMEBREW_LIBRARY}/Taps/homebrew/homebrew-cask"
 
+# Shift the -v to the end of the parameter list
+if [[ "$1" == "-v" ]]
+then
+  shift
+  set -- "$@" -v
+fi
+
 # commands that take a single or no arguments.
+# doesn't need a default case as other arguments handled elsewhere.
+# shellcheck disable=SC2249
 case "$1" in
   --version | -v)
     source "${HOMEBREW_LIBRARY}/Homebrew/cmd/--version.sh"
@@ -735,6 +790,7 @@ export HOMEBREW_LOGS
 export HOMEBREW_DEFAULT_TEMP
 export HOMEBREW_TEMP
 export HOMEBREW_CELLAR
+export HOMEBREW_CASKROOM
 export HOMEBREW_SYSTEM
 export HOMEBREW_SYSTEM_CA_CERTIFICATES_TOO_OLD
 export HOMEBREW_CURL
@@ -780,6 +836,7 @@ EOS
   # a popup window asking the user to install the CLT
   if [[ -n "${XCODE_SELECT_PATH}" ]]
   then
+    # TODO: this is fairly slow, figure out if there's a faster way.
     XCRUN_OUTPUT="$(/usr/bin/xcrun clang 2>&1)"
     XCRUN_STATUS="$?"
 
@@ -791,13 +848,6 @@ You have not agreed to the Xcode license. Please resolve this by running:
 EOS
     fi
   fi
-fi
-
-if [[ "$1" == "-v" ]]
-then
-  # Shift the -v to the end of the parameter list
-  shift
-  set -- "$@" -v
 fi
 
 for arg in "$@"
@@ -816,6 +866,8 @@ HOMEBREW_COMMAND="$1"
 shift
 # If you are going to change anything in below case statement,
 # be sure to also update HOMEBREW_INTERNAL_COMMAND_ALIASES hash in commands.rb
+# doesn't need a default case as other arguments handled elsewhere.
+# shellcheck disable=SC2249
 case "${HOMEBREW_COMMAND}" in
   ls) HOMEBREW_COMMAND="list" ;;
   homepage) HOMEBREW_COMMAND="home" ;;
